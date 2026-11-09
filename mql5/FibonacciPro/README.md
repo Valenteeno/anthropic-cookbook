@@ -1,10 +1,8 @@
-# Fibonacci Pro (MetaTrader 5 indicator)
+# Fibonacci Pro 1.60 (MetaTrader 5 indicator)
 
-**Current version: 1.70, `Fibonacci_Pro_6.mq5`.** Earlier versions are kept side by side; see `CHANGELOG.md` for the version table and what changed in each.
+`Fibonacci_Pro_5.mq5` is the updated indicator. `Fibonacci_Pro_4.mq5` is the 1.50 source it was built from, kept for diffing.
 
-Install: copy `Fibonacci_Pro_6.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Remove an older copy from the chart first. Saved drawings, presets and the toolbar position carry over between versions (same files, same format).
-
-The sections below explain the fixes made in 1.60. 1.70's changes are in `CHANGELOG.md`.
+Install: copy `Fibonacci_Pro_5.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Saved drawings, presets and the toolbar position from 1.50 load unchanged (same files, same format).
 
 ## Why it sometimes did not attach, or stopped responding
 
@@ -58,14 +56,14 @@ Level labels now use a fixed 15 px font height, so their size no longer depends 
 
 ## Verification
 
-MetaEditor is not available on Linux. `tests/` contains a mock-MQL5 harness: `translate.py` rewrites the source as C++ against stubbed MT5 APIs (`mql5_stubs.h`), `mql5_defaults.h` gives every MT5 function an inert default, and `tests.cpp` checks the logic: label rules, visibility masks, the native-object caches (no commands when nothing changed, hide-not-delete grips, slot shifting after a delete, recovery from external deletion), list search, filter and sort with 1000 drawings, and the horizontal-line price math.
+MetaEditor is not available on Linux. `tests/` contains a mock-MQL5 harness: `translate.py` rewrites the source as C++ against stubbed MT5 APIs (`mql5_stubs.h`), and `tests.cpp` checks the new logic: label placement, visibility masks, the object registry and the horizontal-line price math.
 
 ```bash
-cd tests && python3 translate.py ../Fibonacci_Pro_6.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
+cd tests && python3 translate.py ../Fibonacci_Pro_5.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
 ```
 
 ```bash
-g++ -std=c++17 -w tests.cpp -o tests && ./tests
+g++ -std=c++17 -w tests.cpp -o tests -Wl,--unresolved-symbols=ignore-all && ./tests
 ```
 
 This catches typos, wrong signatures and logic errors. It does not replace a MetaEditor compile and a test on a live chart.

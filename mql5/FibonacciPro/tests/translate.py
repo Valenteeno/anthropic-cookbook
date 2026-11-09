@@ -14,7 +14,7 @@ code = "\n".join(out)
 
 # Array reference parameters and dynamic arrays.
 code = re.sub(r"\b(const\s+)?(\w+)\s*&\s*(\w+)\[\]", r"\1MQLArr<\2> &\3", code)
-code = re.sub(r"\b(string|MqlRates|double|int|long)\s+(\w+)\[\];", r"MQLArr<\1> \2;", code)
+code = re.sub(r"\b(string|MqlRates|double|int)\s+(\w+)\[\];", r"MQLArr<\1> \2;", code)
 
 # Colours used anywhere become constants.
 colors = sorted(set(re.findall(r"\bclr(?!NONE\b)\w+", code)))
