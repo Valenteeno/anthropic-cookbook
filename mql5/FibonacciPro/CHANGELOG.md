@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.61 | `Fibonacci_Pro_7.mq5` | **Current.** Built on 1.60. |
+| 1.62 | `Fibonacci_Pro_8.mq5` | **Current.** 1.61 plus sessions, killzones & macros. |
+| 1.61 | `Fibonacci_Pro_7.mq5` | Kept unchanged. Built on 1.60. |
 | 1.70 | `Fibonacci_Pro_6.mq5` | Reverted. Recoverable from git history at commit `77f8a8d`; reverted in `cdcad53`. |
 | 1.60 | `Fibonacci_Pro_5.mq5` | Kept unchanged. Commit `5d7bcca`. |
 | 1.50 | `Fibonacci_Pro_4.mq5` | Original upload. |
@@ -13,6 +14,67 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - 1.60 opens files with up to 128 drawings.
 - 1.50 opens files with up to 24 drawings.
 - With more drawings than that, the older version falls back to its last backup.
+
+## 1.62
+
+**Sessions, killzones & macros.** A new **Zones** button, left of the × on the toolbar's title row, opens a window styled like Properties. All times are New York time, with daylight saving handled automatically.
+
+The window has four tabs:
+- **Macros:** the zone table. Filter it by group: All, Sessions, Killzones, Silver Bullet, Macros or Time lines. Each row has:
+  - On/off, Name, Start and End;
+  - boundary-line style (or None), width and colour;
+  - Label: Off, Name, or Name + times;
+  - Marker, which opens a popup with:
+    - position: below the low, above the high, chart bottom or chart top;
+    - alignment: centre or right;
+    - distance and height in pixels;
+    - opacity;
+  - a "..." button with more options:
+    - group;
+    - fill this zone;
+    - range box with a 50% line;
+    - extend the high and low until price takes them out;
+    - opening-price line, to the zone end or the end of the day;
+    - alert when the zone starts.
+
+  Start = End draws a single time line, and End before Start runs past midnight. The tab also has Add, Defaults, Sort by time and paging.
+- **Parameters:**
+  - master switch;
+  - group toggles;
+  - trading days (a day ends at 17:00 New York, so Sunday evening's Asian session belongs to Monday);
+  - days back and today's upcoming zones;
+  - broker clock: Auto-detect, NY + 7 h, or GMT+N with no DST, EU DST or US DST, with a live "New York = server" check line;
+  - alerts: sound and push to phone, minutes before, and a Test button.
+- **Visualization:**
+  - the highest timeframe each group is drawn on;
+  - boundary lines full height or zone range only;
+  - label size;
+  - hide labels that don't fit, highlight the live zone, fade older days, hover info.
+- **Fill:**
+  - on/off;
+  - full height, range box, or both;
+  - vertical gradient;
+  - opacity slider.
+
+**Overlaps stack in an engulfing manner:**
+- An outer zone's marker keeps its own name row on the outer side and wraps the markers of the zones inside it. For example, London wraps London AM and London PM, and New York wraps New York AM and PM.
+- Zones that only partly overlap stack in separate rows.
+- Zones that just touch share a row.
+- Overlapping fills and strips are blended, not overwritten, so nested zones darken naturally.
+
+**Defaults:**
+- The seven sessions: Asian 19:00-04:00, London 03:00-12:00, New York 08:00-17:00, London AM 03:00-07:00, London PM 07:00-12:00, New York AM 08:00-12:00, New York PM 12:00-17:00.
+- The killzones, Silver Bullet windows, macros and time lines from the lecture. In total the list has 33 zones.
+
+**Highs and lows** come from M1 data, so a 20-minute macro is exact even on an H1 chart.
+
+**Other features:**
+- **Presets:** save, load and delete named zone presets. ICT Forex and ICT Indices are built in. Loading a preset keeps your broker-time setting.
+- **Shared settings:** they apply to every chart using the same workspace name. Changes made on one chart reach the others within a couple of seconds.
+- **Zones button:** it takes the colour of the live zone. Its tooltip shows the New York time, the live zone with the time left, and the next zone with a countdown.
+- **Hover tooltip:** pointing at a zone's marker or line shows its name, group, date, New York and server times, high, low, range, open and status.
+- **Alerts:** sound and/or push notification when a zone starts. Each alert fires once per zone and day, even with the indicator on several charts.
+- **Hotkey:** `InpZonesHotkey` (Ctrl+Shift+K) shows or hides all zones.
 
 ## 1.61
 

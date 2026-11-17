@@ -43,6 +43,7 @@ const int OBJ_NO_PERIODS=-1,OBJ_ALL_PERIODS=0x1fffff;
 const int INVALID_HANDLE=-1,INT_VALUE=4;
 const int FILE_READ=1,FILE_WRITE=2,FILE_BIN=4,FILE_UNICODE=8,FILE_SHARE_READ=16,FILE_REWRITE=32;
 const int TIME_DATE=1,TIME_MINUTES=2,TIME_SECONDS=4;
+enum ENUM_FILE_PROPERTY_INTEGER{FILE_MODIFY_DATE};
 const color clrNONE=-1;
 extern string _Symbol;extern int _Digits;extern double _Point;extern int _Period;
 
@@ -90,6 +91,10 @@ int iBarShift(const string& sym,ENUM_TIMEFRAMES tf,datetime t,bool exact=false);
 datetime iTime(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iOpen(const string& sym,ENUM_TIMEFRAMES tf,int shift);
 double iHigh(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iLow(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iClose(const string& sym,ENUM_TIMEFRAMES tf,int shift);
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,int start,int count,MQLArr<MqlRates>& rates);
+int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,datetime from,datetime to,MQLArr<MqlRates>& rates);
+datetime TimeTradeServer();datetime TimeGMT();datetime TimeCurrent();bool PlaySound(const string& file);bool SendNotification(const string& text);
+bool GlobalVariableTemp(const string& name);bool GlobalVariableSetOnCondition(const string& name,double value,double check);
+long FileGetInteger(const string& name,ENUM_FILE_PROPERTY_INTEGER prop,bool common=false);
 int FileOpen(const string& name,int flags,short delimiter='\t',uint codepage=0);void FileClose(int h);void FileFlush(int h);
 uint FileWriteInteger(int h,int v,int size=INT_VALUE);uint FileWriteLong(int h,long v);uint FileWriteDouble(int h,double v);uint FileWriteString(int h,const string& s,int len=-1);
 int FileReadInteger(int h,int size=INT_VALUE);long FileReadLong(int h);double FileReadDouble(int h);string FileReadString(int h,int len=-1);

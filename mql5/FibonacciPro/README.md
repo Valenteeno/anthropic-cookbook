@@ -1,10 +1,10 @@
 # Fibonacci Pro (MetaTrader 5 indicator)
 
-**Current version: 1.61, `Fibonacci_Pro_7.mq5`.** Earlier versions are kept side by side; `CHANGELOG.md` has the version table and the changes in each version.
+**Current version: 1.62, `Fibonacci_Pro_8.mq5`.** Earlier versions are kept side by side; `CHANGELOG.md` has the version table and the changes in each version.
 
-Install: copy `Fibonacci_Pro_7.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Remove any older copy from the chart first. Saved drawings, presets and the toolbar position carry over between versions (same files, same format).
+Install: copy `Fibonacci_Pro_8.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Remove any older copy from the chart first. Saved drawings, presets and the toolbar position carry over between versions (same files, same format).
 
-The sections below describe the fixes and features introduced in 1.60, which 1.61 builds on.
+1.62 adds sessions, killzones & macros (see `CHANGELOG.md`). The sections below describe the fixes and features introduced in 1.60, which later versions build on.
 
 ## Why it sometimes did not attach, or stopped responding
 
@@ -60,22 +60,23 @@ Level labels now use a fixed 15 px font height, so their size no longer depends 
 
 MetaEditor is not available on Linux. `tests/` contains a mock-MQL5 harness: `translate.py` rewrites the source as C++ against stubbed MT5 APIs (`mql5_stubs.h`), `mql5_defaults.h` gives every MT5 function an inert default, and `tests.cpp` checks:
 
-- the 1.61 defaults;
-- label placement and visibility masks;
-- the object registry;
-- time-window culling;
-- list search, filter and sort, including 1000 drawings;
-- the list panel build and delete rollback;
-- the all-levels colour button;
-- the candle tooltip layout;
-- the horizontal-line price math.
+- the 1.61 behaviour (defaults, label placement, masks, list);
+- calendar, daylight-saving and broker-clock conversion, including the US/EU mismatch weeks;
+- time entry parsing and trading-day mapping;
+- the default zone list and the zone settings file round trip;
+- occurrence building (weekends, upcoming zones) and exact M1 highs and lows;
+- liquidity sweeps and holiday detection;
+- alert deduplication and the live state on the Zones button;
+- compositing of translucent layers and the engulfing marker layout for every marker position;
+- an end-to-end render smoke test;
+- the Zones window: tabs, edits, popups, palette, presets and apply.
 
 ```bash
-cd tests && python3 translate.py ../Fibonacci_Pro_7.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
+cd tests && python3 translate.py ../Fibonacci_Pro_8.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
 ```
 
 ```bash
-g++ -std=c++17 -w tests.cpp -o tests && ./tests
+g++ -std=c++17 -w -fsanitize=address,undefined tests.cpp -o tests && ./tests
 ```
 
 This catches typos, wrong signatures and logic errors. It does not replace a MetaEditor compile and a test on a live chart.
