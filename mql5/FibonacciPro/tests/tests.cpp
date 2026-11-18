@@ -1,10 +1,11 @@
-// Behavioural tests for Fibonacci_Pro_8.mq5 (1.62), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_9.mq5 (1.63), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
 #define TEST_OWN_RATES
 #define TEST_OWN_ALERTS
 #define TEST_OWN_OBJGET
+#define TEST_OWN_CANVAS
 #include "fp5.cpp"
 #include <cstdio>
 #include <cstring>
@@ -22,6 +23,10 @@ int ObjectFind(long,const string& n){return g_objs.count(n)?0:-1;}
 bool ObjectSetInteger(long,const string&,ENUM_OBJECT_PROPERTY_INTEGER,long){g_sets_int++;return true;}
 bool ObjectSetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING p,const string& v){g_sets_str++;if(p==OBJPROP_TEXT)g_texts[n]=v;return true;}
 string ObjectGetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING,int){auto it=g_texts.find(n);return it==g_texts.end()?"":it->second;}
+// Line-canvas fills are recorded on demand, so a test can see which lines were drawn.
+struct RecRect{int x0,y0,x1,y1;};static std::vector<RecRect> g_rects;static bool g_rec=false;
+void CCanvas::FillRectangle(int x1,int y1,int x2,int y2,uint){if(g_rec && this==&g_line_canvas)g_rects.push_back({x1,y1,x2,y2});}
+static int RowPieces(int y,int xa,int xb){int n=0;for(auto& r:g_rects)if(r.y0==y && r.y1==y && r.x1>=xa && r.x0<=xb)n++;return n;}
 // Projection: 1 px per minute from g_xy_t0; price 1.2 at y=0, 3000 px per price unit.
 static long g_xy_t0=0;
 bool ChartTimePriceToXY(long,int,datetime t,double p,int& x,int& y){x=(int)((t-g_xy_t0)/60);y=(int)std::lround((1.2-p)*3000);return true;}
@@ -155,6 +160,27 @@ int main()
    CHECK(sorted.zones[0].start>=1020 && sorted.zones[sorted.count-1].start<1020); // evening zones open the trading day
 
    // ---- settings file round trip and validation
+   FPZoneConfig c2=cfg;c2.zones[3].stack=1;c2.zones[5].midline=true;
+   CHECK(FPZWriteFile("t2.zones",c2));
+   {FPZoneConfig r;CHECK(FPZReadFile("t2.zones",r) && r.zones[3].stack==1 && r.zones[5].midline && r.zones[4].stack==0 && !r.zones[4].midline);}
+   // A file written by 1.62 (schema 1): no stack field, midline implied by the range box,
+   // and edge markers that ignored their distance.
+   {
+    int f=FileOpen("old.zones",FILE_WRITE|FILE_BIN,'\t',0);
+    FileWriteInteger(f,FPZ_MAGIC,4);FileWriteInteger(f,1,4);FileWriteInteger(f,1|2|4|32|64|128|256|512|1024,4);
+    for(int g=0;g<FPZ_GROUPS;g++)FileWriteInteger(f,1|(11<<1),4);
+    int head[]={10,62,0,2,0,8,11,0,2};for(int k=0;k<9;k++)FileWriteInteger(f,head[k],4);
+    for(int z=0;z<2;z++)
+      {
+       WText(f,z==0?"Old KZ":"Old session");
+       int v[]={120,300,2,1,(int)clrDodgerBlue,1,z==0?4:2,0,6,16,45,1,0};for(int k=0;k<13;k++)FileWriteInteger(f,v[k],4);
+       FileWriteInteger(f,1|4,4);   // enabled + box
+      }
+    FileWriteInteger(f,FPZ_END,4);FileClose(f);
+    FPZoneConfig old;CHECK(FPZReadFile("old.zones",old) && old.count==2);
+    CHECK(old.zones[0].midline && old.zones[0].stack==0 && old.zones[0].distance==0);   // top-edge marker: distance reset
+    CHECK(old.zones[1].midline && old.zones[1].distance==6);                            // above-high marker keeps its gap
+   }
    CHECK(FPZWriteFile("t.zones",cfg));
    FPZoneConfig back;CHECK(FPZReadFile("t.zones",back));
    {bool ok=back.count==cfg.count && back.days_back==cfg.days_back && back.alert_push==cfg.alert_push && back.group_tf[3]==cfg.group_tf[3];
@@ -219,7 +245,7 @@ int main()
     n=FPComposeSegments(layers,2,100,100,segs);CHECK(n==3 && segs[1].argb==0xBF5500AA);
     }
 
-   // ---- engulfing marker layout: sessions nest, partial overlaps stack
+   // ---- marker strips: every zone has its own rectangle; overlaps step apart; placement honoured
    FPZoneDefaults(g_zact,false);g_height=600;g_width=1600;
    g_zocc_n=0;g_zvis_n=0;ArrayResize(g_zocc,16);ArrayResize(g_zvis,16);
    auto add=[&](const string& name,int s0,int s1)
@@ -228,39 +254,49 @@ int main()
       g_zvis[v].occ=i;g_zvis[v].x0=400+s0;g_zvis[v].x1=400+s1;g_zvis[v].yh=100;g_zvis[v].yl=300;g_zvis[v].yo=FP_OFF;};
    add("Asian",-300,240);add("London",180,720);add("New York",480,1020);add("London AM",180,420);
    add("London PM",420,720);add("New York AM",480,720);add("New York PM",720,1020);
-   auto check_nest=[&](int anchor)
+   auto overlap=[&](int p,int q){return !(g_zmark[p].x0>g_zmark[q].x1 || g_zmark[q].x0>g_zmark[p].x1) && g_zmark[p].y0<g_zmark[q].y1 && g_zmark[q].y0<g_zmark[p].y1;};
+   auto check_sep=[&](int anchor,int dist)
      {
-      for(int z=0;z<7;z++)g_zact.zones[z].marker=anchor;
+      for(int z=0;z<7;z++){g_zact.zones[z].marker=anchor;g_zact.zones[z].distance=dist;g_zact.zones[z].stack=0;g_zact.zones[z].height=15;}
       ZonesLayout();
-      int L=MarkOfZone(FindZone(g_zact,"London")),N=MarkOfZone(FindZone(g_zact,"New York")),A=MarkOfZone(FindZone(g_zact,"Asian"));
-      int LA=MarkOfZone(FindZone(g_zact,"London AM")),LP=MarkOfZone(FindZone(g_zact,"London PM")),NA=MarkOfZone(FindZone(g_zact,"New York AM")),NP=MarkOfZone(FindZone(g_zact,"New York PM"));
-      bool ok=g_zmark[NA].parent==N && g_zmark[NP].parent==N && g_zmark[LA].parent==L && g_zmark[LP].parent==L
-              && g_zmark[L].parent<0 && g_zmark[N].parent<0 && g_zmark[A].parent<0;
-      int kids[]={LA,LP,NA,NP};
-      for(int q=0;q<4;q++)
+      bool ok=g_zmark_n==7;
+      for(int p=0;p<g_zmark_n;p++)
         {
-         int k=kids[q],p=g_zmark[k].parent;
-         ok=ok && g_zmark[k].x0>=g_zmark[p].x0 && g_zmark[k].x1<=g_zmark[p].x1 && g_zmark[k].y0>=g_zmark[p].y0 && g_zmark[k].y1<=g_zmark[p].y1;
-         // Children never cover the parent's own name row.
-         ok=ok && (g_zmark[k].y1<=g_zmark[p].ry0 || g_zmark[k].y0>=g_zmark[p].ry1);
+         ok=ok && g_zmark[p].y1-g_zmark[p].y0==16;                       // its own height: nothing wraps it
+         for(int q=p+1;q<g_zmark_n;q++)ok=ok && !overlap(p,q);           // never shares a rectangle
         }
-      auto apart=[&](int p,int q){return g_zmark[p].y1+2<=g_zmark[q].y0 || g_zmark[q].y1+2<=g_zmark[p].y0;};
-      ok=ok && apart(L,N) && apart(A,L);
-      bool outer_bottom=anchor==1 || anchor==3;
-      ok=ok && (outer_bottom?g_zmark[L].ry1==g_zmark[L].y1:g_zmark[L].ry0==g_zmark[L].y0);
+      // The first strip placed (longest, earliest: Asian) sits exactly at its distance;
+      // London overlaps it and steps one row away; touching AM/PM strips share a row.
+      int A=MarkOfZone(FindZone(g_zact,"Asian")),L=MarkOfZone(FindZone(g_zact,"London"));
+      int LA=MarkOfZone(FindZone(g_zact,"London AM")),LP=MarkOfZone(FindZone(g_zact,"London PM"));
+      int expect=anchor==1?300+dist:(anchor==2?100-dist-16:(anchor==3?g_height-dist-16:dist));
+      int step=(anchor==1 || anchor==4)?18:-18;
+      ok=ok && g_zmark[A].y0==expect && g_zmark[L].y0==expect+step && g_zmark[LA].y0==g_zmark[LP].y0;
       return ok;
      };
-   CHECK(check_nest(3));
-   {int L=MarkOfZone(FindZone(g_zact,"London")),N=MarkOfZone(FindZone(g_zact,"New York")),A=MarkOfZone(FindZone(g_zact,"Asian"));
-    int LA=MarkOfZone(FindZone(g_zact,"London AM")),LP=MarkOfZone(FindZone(g_zact,"London PM"));
-    CHECK(std::max(g_zmark[A].y1,std::max(g_zmark[L].y1,g_zmark[N].y1))==g_height);   // the lowest block sits on the edge
-    CHECK(g_zmark[LA].y0==g_zmark[LP].y0 && g_zmark[L].total==g_zmark[L].h+2+g_zmark[LA].total);} // AM and PM share one row
-   CHECK(check_nest(4));
-   {int L=MarkOfZone(FindZone(g_zact,"London"));CHECK(g_zmark[L].y0==0 || g_zmark[L].y0>0);}
-   CHECK(check_nest(1));
-   {int L=MarkOfZone(FindZone(g_zact,"London"));CHECK(g_zmark[L].y0>=300+g_zact.zones[FindZone(g_zact,"London")].distance);}
-   CHECK(check_nest(2));
-   {int L=MarkOfZone(FindZone(g_zact,"London"));CHECK(g_zmark[L].y1<=100-g_zact.zones[FindZone(g_zact,"London")].distance);}
+   CHECK(check_sep(3,0));CHECK(check_sep(4,0));CHECK(check_sep(1,6));CHECK(check_sep(2,6));CHECK(check_sep(3,10));
+   // A fixed strip stays exactly where its distance puts it; automatic ones keep clear of it.
+   {int lz=FindZone(g_zact,"London");g_zact.zones[lz].stack=1;g_zact.zones[lz].distance=40;
+    for(int z=0;z<7;z++)if(z!=lz){g_zact.zones[z].marker=3;g_zact.zones[z].distance=0;g_zact.zones[z].stack=0;}
+    g_zact.zones[lz].marker=3;ZonesLayout();
+    int L=MarkOfZone(lz);bool ok=g_zmark[L].y0==g_height-40-16;
+    for(int q=0;q<g_zmark_n;q++)if(q!=L)ok=ok && !overlap(q,L);
+    CHECK(ok);g_zact.zones[lz].stack=0;}
+   // Sharing even one pixel column is an overlap: London PM moved onto London AM's last column.
+   {int la=FindZone(g_zact,"London AM"),lp=FindZone(g_zact,"London PM"),vp=-1;
+    for(int z=0;z<7;z++){g_zact.zones[z].marker=3;g_zact.zones[z].distance=0;g_zact.zones[z].stack=0;}
+    for(int v=0;v<g_zvis_n;v++)if(g_zocc[g_zvis[v].occ].zone==lp)vp=v;
+    g_zvis[vp].x0--;ZonesLayout();
+    int A=MarkOfZone(la),P=MarkOfZone(lp);CHECK(g_zmark[A].x1==g_zmark[P].x0 && g_zmark[A].y0!=g_zmark[P].y0 && !overlap(A,P));
+    g_zvis[vp].x0++;}
+   // Two fixed strips both stay exactly at their distance, even on top of each other, and
+   // automatic strips keep clear of them even where they would otherwise come first.
+   {int lz=FindZone(g_zact,"London"),nz=FindZone(g_zact,"New York");
+    for(int z=0;z<7;z++){g_zact.zones[z].marker=3;g_zact.zones[z].distance=0;g_zact.zones[z].stack=0;}
+    g_zact.zones[lz].stack=1;g_zact.zones[nz].stack=1;ZonesLayout();
+    int L=MarkOfZone(lz),N=MarkOfZone(nz);bool ok=g_zmark[L].y0==g_height-16 && g_zmark[N].y0==g_height-16;
+    for(int q=0;q<g_zmark_n;q++)if(q!=L && q!=N)ok=ok && !overlap(q,L) && !overlap(q,N);
+    CHECK(ok);g_zact.zones[lz].stack=0;g_zact.zones[nz].stack=0;}
 
    // ---- end-to-end render smoke test (AddressSanitizer build)
    FPZoneDefaults(g_zcfg,false);g_zcfg.broker_mode=1;g_zcfg.zones[FindZone(g_zcfg,"Asian KZ")].extend=true;
@@ -271,15 +307,117 @@ int main()
    g_owner=true;for(int f=0;f<30;f++){g_dirty=true;Render();}
    CHECK(g_zvis_n>0 && g_zmark_n>0 && g_zfill_n>0 && g_zfill_sig!=0);
    {int k=MarkOfZone(FindZone(g_zact,"London"));CHECK(k>=0);
-    int occ=-1;CHECK(FindZoneAt((g_zmark[k].x0+g_zmark[k].x1)/2,(g_zmark[k].ry0+g_zmark[k].ry1)/2,occ) && g_zocc[occ].zone==FindZone(g_zact,"London"));
-    MQLArr<string> lines;color accent=clrNONE;ZoneTip(occ,lines,accent);
+    int occ=-1,kind=-1;CHECK(FindZoneAt((g_zmark[k].x0+g_zmark[k].x1)/2,(g_zmark[k].y0+g_zmark[k].y1)/2,occ,kind) && kind==0 && g_zocc[occ].zone==FindZone(g_zact,"London"));
+    MQLArr<string> lines;color accent=clrNONE;ZoneTip(occ,kind,lines,accent);
     CHECK(ArraySize(lines)>=6 && lines[0]=="London" && lines[2]=="New York\t03:00 - 12:00" && accent==g_zact.zones[FindZone(g_zact,"London")].ink);}
+   // Hovering the Asian KZ midline and its extended high gives line tooltips. Make the data
+   // unambiguous first: Monday's high untaken for 3 hours, the Midnight Open a little lower.
+   {int az=FindZone(g_zact,"Asian KZ"),mo=FindZone(g_zact,"Midnight Open"),v=-1;
+    for(int i=0;i<g_zocc_n;i++)
+      {
+       if(g_zocc[i].zone==az && g_zocc[i].day==(int)d17)
+         {g_zocc[i].hi_taken=g_zocc[i].te+3*3600;g_zocc[i].lo_taken=0;g_zocc[i].hi=1.1150;g_zocc[i].lo=1.0950;}  // 60 px tall, low untaken
+       if(g_zocc[i].zone==mo && g_zocc[i].day==(int)d17)g_zocc[i].op-=0.002;
+      }
+    g_dirty=true;Render();
+    for(int q=0;q<g_zvis_n;q++){int i=g_zvis[q].occ;if(g_zocc[i].zone==az && g_zocc[i].day==(int)d17 && g_zvis[q].yh!=FP_OFF)v=q;}
+    CHECK(v>=0);
+    if(v>=0)
+      {
+       int i=g_zvis[v].occ,occ=-1,kind=-1,ym=(g_zvis[v].yh+g_zvis[v].yl)/2;MQLArr<string> lines;color accent=clrNONE;
+       CHECK(FindZoneAt((g_zvis[v].x0+g_zvis[v].x1)/2,ym,occ,kind) && occ==i && kind==3);
+       ZoneTip(occ,kind,lines,accent);
+       CHECK(lines[1]=="50% of the range (midline)" && lines[2]=="Price	"+DoubleToString((g_zocc[i].hi+g_zocc[i].lo)/2,_Digits));
+       CHECK(g_zvis[v].xh==g_zvis[v].x1+180);                                   // extended to the taken time
+       CHECK(FindZoneAt(g_zvis[v].x1+60,g_zvis[v].yh,occ,kind) && occ==i && kind==5);
+       ZoneTip(occ,kind,lines,accent);
+       bool status=false;for(int q=0;q<ArraySize(lines);q++)if(lines[q]=="Status\tTaken 03:00 New York, Tue")status=true;
+       CHECK(lines[1]=="Range high, extended" && status && lines[2]=="Price\t"+DoubleToString(g_zocc[i].hi,_Digits));
+       CHECK(!FindZoneAt(g_zvis[v].x1+240,g_zvis[v].yh,occ,kind) || kind!=5);       // beyond the sweep: no longer this line
+       CHECK(FindZoneAt(g_zvis[v].x0+3,g_zvis[v].yl,occ,kind) && kind==2);        // range box edge
+       // The untaken low runs on to the right edge, past the swept high.
+       CHECK(g_zvis[v].xl==g_width-1);
+       CHECK(FindZoneAt(g_zvis[v].x1+240,g_zvis[v].yl,occ,kind) && occ==i && kind==6);
+       ZoneTip(occ,kind,lines,accent);
+       bool open=false;for(int q=0;q<ArraySize(lines);q++)if(lines[q]=="Status\tNot taken yet")open=true;
+       CHECK(lines[1]=="Range low, extended" && open && lines[2]=="Price\t"+DoubleToString(g_zocc[i].lo,_Digits));
+       // A line answers within 3 px, not further.
+       int xm=(g_zvis[v].x0+g_zvis[v].x1)/2;
+       CHECK(FindZoneAt(xm,ym+3,occ,kind) && occ==i && kind==3);
+       CHECK(!FindZoneAt(xm,ym+8,occ,kind) || kind!=3);
+       // The 50% line has its own switch: drawn and hoverable without the box, gone without the switch.
+       g_zact.zones[az].box=false;g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;
+       int on_rows=RowPieces(ym,g_zvis[v].x0+1,g_zvis[v].x1-1);
+       CHECK(g_zvis[v].occ==i && FindZoneAt(xm,ym,occ,kind) && occ==i && kind==3);
+       g_zact.zones[az].box=true;g_zact.zones[az].midline=false;g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;
+       int off_rows=RowPieces(ym,g_zvis[v].x0+1,g_zvis[v].x1-1);
+       CHECK(on_rows>off_rows);
+       CHECK(g_zvis[v].occ==i && (!FindZoneAt(xm,ym,occ,kind) || kind!=3));
+       g_zact.zones[az].midline=true;g_dirty=true;Render();
+      }
+    int w=-1;
+    for(int q=0;q<g_zvis_n;q++){int i=g_zvis[q].occ;if(g_zocc[i].zone==mo && g_zocc[i].day==(int)d17 && g_zvis[q].yo!=FP_OFF)w=q;}
+    CHECK(w>=0);
+    if(w>=0){int occ=-1,kind=-1;CHECK(FindZoneAt(g_zvis[w].x0+40,g_zvis[w].yo,occ,kind) && kind==4);}}
    for(int i=0;i<200;i++){g_zmark_n=0;Render();}                       // repeated frames stay stable
    CHECK(g_zmark_n>0);
 
    // ---- Zones window: tabs, table edits, popups, palette, presets, apply
    g_zstore="mem.zones";SaveZones();CHECK(FileIsExist("mem.zones",0));
    OpenZones();CHECK(g_zeditor && g_zedit.count==33);
+   {g_dirty=true;Render();int lz=FindZone(g_zedit,"London"),k=MarkOfZone(lz);CHECK(k>=0);
+    int cx=(g_zmark[k].x0+g_zmark[k].x1)/2,cy=(g_zmark[k].y0+g_zmark[k].y1)/2,old=g_zedit.zones[lz].distance;
+    int gap=g_height-g_zmark[k].y1;                                       // where it is now (after auto stacking)
+    CHECK(ZoneDragBegin(cx,cy) && g_zdrag);
+    ZoneDragMove(cx,cy-30);CHECK(g_zedit.zones[lz].distance==gap+30 && g_zedit.zones[lz].stack==1 && g_zact.zones[lz].distance==gap+30);
+    ZoneDragEnd();CHECK(!g_zdrag);
+    g_dirty=true;Render();k=MarkOfZone(lz);CHECK(g_zmark[k].y1==g_height-(gap+30));        // drawn exactly where it was dropped
+    CHECK(ZoneDragBegin((g_zmark[k].x0+g_zmark[k].x1)/2,(g_zmark[k].y0+g_zmark[k].y1)/2));
+    ZoneDragMove(cx,cy-80);CancelDrag();CHECK(!g_zdrag && g_zedit.zones[lz].distance==gap+30); // Esc restores
+    g_zedit.zones[lz].distance=old;g_zedit.zones[lz].stack=0;ZonePreview(false);
+    CloseZones();CHECK(!ZoneDragBegin(cx,cy));OpenZones();}                                    // only while the window is open
+   {int lz=FindZone(g_zedit,"London");
+    int om=g_zedit.zones[lz].marker,od=g_zedit.zones[lz].distance,os=g_zedit.zones[lz].stack;
+    for(int a=1;a<=4;a++)
+      {
+       g_zedit.zones[lz].marker=a;g_zedit.zones[lz].distance=10;g_zedit.zones[lz].stack=1;ZonePreview(false);
+       g_dirty=true;Render();
+       int k=-1;for(int q=0;q<g_zmark_n;q++)if(g_zocc[g_zvis[g_zmark[q].vis].occ].zone==lz && g_zmark[q].anchor==a && g_zmark[q].x0>=0)k=q;
+       CHECK(k>=0);if(k<0)continue;
+       int occ=g_zvis[g_zmark[k].vis].occ,cx=(g_zmark[k].x0+g_zmark[k].x1)/2,cy=(g_zmark[k].y0+g_zmark[k].y1)/2,y0=g_zmark[k].y0;
+       int away=(a==1 || a==4)?20:-20;                                      // further from price / the edge
+       CHECK(ZoneDragBegin(cx,cy));ZoneDragMove(cx,cy+away);ZoneDragEnd();
+       CHECK(g_zedit.zones[lz].distance==30 && g_zedit.zones[lz].stack==1);
+       g_dirty=true;Render();
+       int k2=-1;for(int q=0;q<g_zmark_n;q++)if(g_zvis[g_zmark[q].vis].occ==occ)k2=q;
+       CHECK(k2>=0 && g_zmark[k2].y0==y0+away);
+      }
+    g_zedit.zones[lz].marker=3;g_zedit.zones[lz].distance=0;g_zedit.zones[lz].stack=0;ZonePreview(false);
+    g_dirty=true;Render();int k=MarkOfZone(lz);CHECK(k>=0);
+    int cx=(g_zmark[k].x0+g_zmark[k].x1)/2,cy=(g_zmark[k].y0+g_zmark[k].y1)/2;
+    CHECK(ZoneDragBegin(cx,cy));ZoneDragMove(cx,cy-2);ZoneDragEnd();                        // a plain click changes nothing
+    CHECK(!g_zdrag && g_zedit.zones[lz].distance==0 && g_zedit.zones[lz].stack==0);
+    CHECK(ZoneDragBegin(cx,cy));ZoneDragMove(cx,cy-50);CHECK(g_zedit.zones[lz].stack==1 && g_zedit.zones[lz].distance>0);
+    CancelDrag();CHECK(!g_zdrag && g_zedit.zones[lz].distance==0 && g_zedit.zones[lz].stack==0 && g_zact.zones[lz].stack==0);
+    // The Esc key during a drag undoes only the drag: the window stays open with its other edits.
+    int ol=g_zedit.zones[lz].label;g_zedit.zones[lz].label=2;ZonePreview(false);
+    g_dirty=true;Render();k=MarkOfZone(lz);CHECK(k>=0);
+    cx=(g_zmark[k].x0+g_zmark[k].x1)/2;cy=(g_zmark[k].y0+g_zmark[k].y1)/2;
+    CHECK(ZoneDragBegin(cx,cy));ZoneDragMove(cx,cy-50);
+    {long lp=27;double dp=0;string sp="";OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);}
+    CHECK(!g_zdrag && g_zeditor && g_zedit.zones[lz].distance==0 && g_zedit.zones[lz].stack==0 && g_zedit.zones[lz].label==2);
+    // Closing the window mid-drag (a hotkey) also ends the drag cleanly.
+    CHECK(ZoneDragBegin(cx,cy));ZoneDragMove(cx,cy-50);CloseZones();
+    CHECK(!g_zdrag && !g_zeditor && g_zedit.zones[lz].stack==0);OpenZones();
+    // Resting on a strip pauses chart scrolling, so a drag starts without panning the chart.
+    g_dirty=true;Render();k=MarkOfZone(lz);cx=(g_zmark[k].x0+g_zmark[k].x1)/2;cy=(g_zmark[k].y0+g_zmark[k].y1)/2;
+    ReleaseScroll();HandlePointer(cx,cy,false);CHECK(g_scroll_held);
+    int ex=-1,ey=-1;
+    for(int yy=5;yy<g_height && ex<0;yy+=7)for(int xx=5;xx<g_width && ex<0;xx+=37)if(!HitUI(xx,yy) && FindZoneMarkAt(xx,yy)<0){ex=xx;ey=yy;}
+    CHECK(ex>=0);HandlePointer(ex,ey,false);CHECK(!g_scroll_held);
+    CloseZones();HandlePointer(cx,cy,false);CHECK(!g_scroll_held);OpenZones();      // not without the window
+    g_zedit.zones[lz].label=ol;
+    g_zedit.zones[lz].marker=om;g_zedit.zones[lz].distance=od;g_zedit.zones[lz].stack=os;ZonePreview(false);}
    for(int t=0;t<4;t++){g_ztab=t;g_ui_dirty=true;BuildUI();}
    CHECK(RegFind(UIS("Z.Tab3"))>=0 && RegFind(UIS("Z.Name0"))>=0 && RegFind(UIS("T.Zones"))>=0);
    CHECK(HitUI(g_panel_x+U(400),g_panel_y+U(100)));
@@ -290,8 +428,11 @@ int main()
    ObjectSetString(0,UIS("Z.Start1"),OBJPROP_TEXT,"99:99");CHECK(!HarvestZoneEdits() && g_zedit.zones[1].start==150);
    ObjectSetString(0,UIS("Z.Start1"),OBJPROP_TEXT,"03:00");HarvestZoneEdits();BuildUI();
    ZoneMarkerPopup(1);CHECK(g_popup==14);ZonePopupClick(Obj("Q.Pos4"));CHECK(g_zedit.zones[1].marker==4);
-   ZonePopupClick(Obj("Q.DistUp"));CHECK(g_zedit.zones[1].distance==8);ZonePopupClick(Obj("Q.Done"));CHECK(g_popup==0);
-   ZoneMorePopup(1);ZonePopupClick(Obj("Q.Box"));CHECK(g_zedit.zones[1].box);ZonePopupClick(Obj("Q.Open1"));CHECK(g_zedit.zones[1].open_line==1);ClosePopup();
+   ZonePopupClick(Obj("Q.DistUp"));CHECK(g_zedit.zones[1].distance==2);ZonePopupClick(Obj("Q.Done"));CHECK(g_popup==0);
+   ZonePopupClick(Obj("Q.St1"));                                         // (popup already closed: ignored)
+   ZoneMarkerPopup(1);ZonePopupClick(Obj("Q.St1"));CHECK(g_zedit.zones[1].stack==1);ZonePopupClick(Obj("Q.St0"));CHECK(g_zedit.zones[1].stack==0);ClosePopup();
+   ZoneMorePopup(1);ZonePopupClick(Obj("Q.Box"));CHECK(g_zedit.zones[1].box && !g_zedit.zones[1].midline);
+   ZonePopupClick(Obj("Q.Mid"));CHECK(g_zedit.zones[1].midline);ZonePopupClick(Obj("Q.Open1"));CHECK(g_zedit.zones[1].open_line==1);ClosePopup();
    Dropdown(10,1);CHECK(g_popup==10 && g_popup_items==6);DropdownChoice(5);ClosePopup();CHECK(g_zedit.zones[1].style==5);
    g_ztab=0;BuildUI();Dropdown(13,-1);CHECK(g_popup==13);DropdownChoice(3);ClosePopup();CHECK(g_zedit.broker_mode==3);
    Palette(-1001);CHECK(g_popup==3);PickApply(clrRed);CHECK(g_zedit.zones[1].ink==clrRed);

@@ -5,7 +5,10 @@ long AccountInfoInteger(ENUM_ACCOUNT_INFO_INTEGER){return 0;}
 string AccountInfoString(ENUM_ACCOUNT_INFO_STRING){return "";}
 bool CCanvas::CreateBitmapLabel(long,int,const string&,int,int,int,int,ENUM_COLOR_FORMAT){return true;}
 void CCanvas::Destroy(){}int CCanvas::Width(){return 0;}int CCanvas::Height(){return 0;}void CCanvas::Erase(uint){}void CCanvas::Update(bool){}
-void CCanvas::PixelSet(int,int,uint){}void CCanvas::FillRectangle(int,int,int,int,uint){}void CCanvas::Rectangle(int,int,int,int,uint){}
+void CCanvas::PixelSet(int,int,uint){}void CCanvas::Rectangle(int,int,int,int,uint){}
+#ifndef TEST_OWN_CANVAS
+void CCanvas::FillRectangle(int,int,int,int,uint){}
+#endif
 void CCanvas::Line(int,int,int,int,uint){}bool CCanvas::FontSet(const string&,int,uint,uint){return true;}
 int CCanvas::TextWidth(const string& t){return (int)t.size()*6;}int CCanvas::TextHeight(const string&){return 14;}void CCanvas::TextOut(int,int,const string&,uint,uint){}
 double ChartGetDouble(long,ENUM_CHART_PROPERTY_DOUBLE,int){return 0;}long ChartGetInteger(long,ENUM_CHART_PROPERTY_INTEGER,int){return 0;}

@@ -1,10 +1,10 @@
 # Fibonacci Pro (MetaTrader 5 indicator)
 
-**Current version: 1.62, `Fibonacci_Pro_8.mq5`.** Earlier versions are kept side by side; `CHANGELOG.md` has the version table and the changes in each version.
+**Current version: 1.63, `Fibonacci_Pro_9.mq5`.** Earlier versions are kept side by side; `CHANGELOG.md` has the version table and the changes in each version.
 
-Install: copy `Fibonacci_Pro_8.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Remove any older copy from the chart first. Saved drawings, presets and the toolbar position carry over between versions (same files, same format).
+Install: copy `Fibonacci_Pro_9.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Remove any older copy from the chart first. Saved drawings, presets and the toolbar position carry over between versions (same files, same format). Zone settings from 1.62 carry over to 1.63, but 1.62 can't read zone settings saved by 1.63.
 
-1.62 adds sessions, killzones & macros (see `CHANGELOG.md`). The sections below describe the fixes and features introduced in 1.60, which later versions build on.
+1.62 added sessions, killzones & macros. 1.63 gives every zone its own marker strip, which you can drag into place, and adds tooltips on zone lines. See `CHANGELOG.md`. The sections below describe the fixes and features introduced in 1.60, which later versions build on.
 
 ## Why it sometimes did not attach, or stopped responding
 
@@ -63,16 +63,18 @@ MetaEditor is not available on Linux. `tests/` contains a mock-MQL5 harness: `tr
 - the 1.61 behaviour (defaults, label placement, masks, list);
 - calendar, daylight-saving and broker-clock conversion, including the US/EU mismatch weeks;
 - time entry parsing and trading-day mapping;
-- the default zone list and the zone settings file round trip;
+- the default zone list and the zone settings file round trip, including reading 1.62 settings;
 - occurrence building (weekends, upcoming zones) and exact M1 highs and lows;
 - liquidity sweeps and holiday detection;
 - alert deduplication and the live state on the Zones button;
-- compositing of translucent layers and the engulfing marker layout for every marker position;
+- compositing of translucent layers;
+- marker strips for every marker position: separate strips, Auto and Fixed stacking, and drag to place with Esc to undo;
+- line tooltips: midline, extended high and low with their taken status, range box edges and opening price;
 - an end-to-end render smoke test;
 - the Zones window: tabs, edits, popups, palette, presets and apply.
 
 ```bash
-cd tests && python3 translate.py ../Fibonacci_Pro_8.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
+cd tests && python3 translate.py ../Fibonacci_Pro_9.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
 ```
 
 ```bash

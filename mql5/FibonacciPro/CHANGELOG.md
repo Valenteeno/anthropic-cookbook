@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.62 | `Fibonacci_Pro_8.mq5` | **Current.** 1.61 plus sessions, killzones & macros. |
+| 1.63 | `Fibonacci_Pro_9.mq5` | **Current.** 1.62 with separate marker strips you can place, and tooltips on zone lines. |
+| 1.62 | `Fibonacci_Pro_8.mq5` | Kept unchanged. Commit `cae310b`. 1.61 plus sessions, killzones & macros. |
 | 1.61 | `Fibonacci_Pro_7.mq5` | Kept unchanged. Built on 1.60. |
 | 1.70 | `Fibonacci_Pro_6.mq5` | Reverted. Recoverable from git history at commit `77f8a8d`; reverted in `cdcad53`. |
 | 1.60 | `Fibonacci_Pro_5.mq5` | Kept unchanged. Commit `5d7bcca`. |
@@ -14,6 +15,34 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - 1.60 opens files with up to 128 drawings.
 - 1.50 opens files with up to 24 drawings.
 - With more drawings than that, the older version falls back to its last backup.
+- Zone settings and zone presets saved by 1.63 can't be read by 1.62 (details under 1.63).
+
+## 1.63
+
+**Every zone has its own marker strip.** Overlapping zones no longer share one engulfing rectangle.
+- **Automatic separation:** overlapping strips separate automatically. The longest zone sits nearest its position (the low, the high, or the chart edge), and the others step away from it one row at a time. Strips that only touch still share a row.
+- **Stack**, a new option in each zone's Marker popup:
+  - **Auto** (the default) moves the strip clear of other strips.
+  - **Fixed** keeps the strip exactly at its distance, even on top of another strip. Where strips overlap, their colours are blended.
+- **Distance** now applies to all four positions. It is measured from the zone's low, from its high, or from the chart's bottom or top edge. Strips at the chart edge start at 0, flush with the edge, as in 1.62.
+- **Drag to place:** while the Zones window is open, press a marker strip on the chart and drag it up or down. The strip follows the pointer.
+  - When you release it, its zone switches to Fixed at that distance, so the strip moves the same way on every day.
+  - Esc during the drag puts it back.
+  - Apply or OK keeps the change; Cancel reverts it.
+
+**Tooltips on zone lines.** Pointing at a line, within 3 px of it, shows what the line is and its price:
+- **50% line (midline):** its price, plus the range high and low.
+- **Extended high and low:** the price and whether price has taken it out, for example "Taken 03:00 New York" or "Not taken yet". The tooltip works along the whole extension, up to the time it was taken or to the chart's right edge.
+- **Range box high and low**, and the **opening-price line**.
+
+Each line tooltip also shows the zone's name, group, date and New York times. Marker strips keep the full zone tooltip. While the Zones window is open, it adds "Drag up or down to place this marker".
+
+**The 50% line has its own switch** in the "..." options, separate from the range box. Settings from 1.62 look the same as before: a zone that had the range box gets both.
+
+**Settings format.** Zone settings and zone presets are saved in a new format (version 2).
+- 1.63 reads 1.62's zone settings and presets.
+- 1.62 can't read zone settings saved by 1.63. It falls back to the backup file while that is still in 1.62's format, otherwise to its default zones. It doesn't overwrite the 1.63 file unless you press Apply or OK in its Zones window.
+- 1.62 can't load zone presets saved by 1.63. The two built-in presets work in both versions.
 
 ## 1.62
 
@@ -56,7 +85,7 @@ The window has four tabs:
   - vertical gradient;
   - opacity slider.
 
-**Overlaps stack in an engulfing manner:**
+**Overlaps stack in an engulfing manner** (replaced in 1.63 by a separate strip per zone):
 - An outer zone's marker keeps its own name row on the outer side and wraps the markers of the zones inside it. For example, London wraps London AM and London PM, and New York wraps New York AM and PM.
 - Zones that only partly overlap stack in separate rows.
 - Zones that just touch share a row.
