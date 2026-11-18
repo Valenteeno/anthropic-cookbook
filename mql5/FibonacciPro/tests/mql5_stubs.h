@@ -103,6 +103,7 @@ bool FileCopy(const string& src,int common,const string& dst,int mode);bool File
 bool FileDelete(const string& name,int common=0);bool FolderCreate(const string& name,int common=0);
 long FileFindFirst(const string& filter,string& name,int common=0);bool FileFindNext(long h,string& name);void FileFindClose(long h);
 class CCanvas{public:
+ int m_w=0,m_h=0;   // size of the created bitmap, as MT5 reports it
  bool CreateBitmapLabel(long chart,int sub,const string& name,int x,int y,int w,int h,ENUM_COLOR_FORMAT fmt);
  void Destroy();int Width();int Height();void Erase(uint clr=0);void Update(bool redraw=true);
  void PixelSet(int x,int y,uint clr);void FillRectangle(int x1,int y1,int x2,int y2,uint clr);void Rectangle(int x1,int y1,int x2,int y2,uint clr);

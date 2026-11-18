@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.63 | `Fibonacci_Pro_9.mq5` | **Current.** 1.62 with separate marker strips you can place, and tooltips on zone lines. |
+| 1.64 | `Fibonacci_Pro_10.mq5` | **Current.** 1.63 with Fib and zone shading blended, so killzones stay visible over Fib ranges. |
+| 1.63 | `Fibonacci_Pro_9.mq5` | Kept unchanged. Commit `e083f0a`. Separate marker strips you can place, and tooltips on zone lines. |
 | 1.62 | `Fibonacci_Pro_8.mq5` | Kept unchanged. Commit `cae310b`. 1.61 plus sessions, killzones & macros. |
 | 1.61 | `Fibonacci_Pro_7.mq5` | Kept unchanged. Built on 1.60. |
 | 1.70 | `Fibonacci_Pro_6.mq5` | Reverted. Recoverable from git history at commit `77f8a8d`; reverted in `cdcad53`. |
@@ -15,7 +16,29 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - 1.60 opens files with up to 128 drawings.
 - 1.50 opens files with up to 24 drawings.
 - With more drawings than that, the older version falls back to its last backup.
-- Zone settings and zone presets saved by 1.63 can't be read by 1.62 (details under 1.63).
+- Zone settings and zone presets saved by 1.63 or 1.64 can't be read by 1.62 (details under 1.63).
+- 1.63 reads zone settings saved by 1.64 and ignores the two settings 1.64 adds.
+
+## 1.64
+
+**Killzones stay visible over Fib ranges.** Up to 1.63, each shaded Fib range was painted over everything beneath it. Zone shading disappeared wherever a Fib range was shaded, and overlapping Fib ranges erased each other where they overlapped.
+
+**All shading blends.** Fib fills and zone fills are now combined in one pass, so every shaded area stays visible where it overlaps another:
+- Ranges drawn on higher timeframes go underneath, then ranges drawn on lower timeframes. Among Fibs drawn on the same timeframe, the selected one is on top.
+- Zone shading goes on top, so killzones keep their own colour.
+- Fib fills with a vertical gradient look the same as before.
+
+**Two new settings on the Zones window's Fill tab:**
+- **Zones cut through Fib shading:** Off, Half (the default) or Clear. Inside each shaded zone, Fib shading is reduced by that much, so killzones show as clear coloured windows even through heavy range shading. Fib levels and labels aren't affected.
+- **Fib shading on lower timeframes:** Full (the default), Faint or Off. On charts below the timeframe a Fib was drawn on, its shading is drawn as set, at a third of its opacity, or not at all. The Fib's levels and labels stay as they are.
+
+Like the other zone settings, both are shared by all charts of the workspace. Loading a zone preset keeps them, as it keeps the broker-time setting.
+
+**Settings compatibility.** The two settings are stored in spare bits of the zone settings file, which keeps the 1.63 format:
+- 1.63 can read zone settings and presets saved by 1.64; it ignores the two new settings.
+- Settings from 1.63 open in 1.64 with Half and Full.
+
+**Speed.** All shading still goes into the one background image, so there is no extra image upload per frame. Gradients are drawn in steps too small to see, which keeps redraws quick even with many shaded ranges on screen.
 
 ## 1.63
 

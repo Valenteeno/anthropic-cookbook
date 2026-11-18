@@ -1,4 +1,4 @@
-// Behavioural tests for Fibonacci_Pro_9.mq5 (1.63), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_10.mq5 (1.64), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
@@ -24,9 +24,22 @@ bool ObjectSetInteger(long,const string&,ENUM_OBJECT_PROPERTY_INTEGER,long){g_se
 bool ObjectSetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING p,const string& v){g_sets_str++;if(p==OBJPROP_TEXT)g_texts[n]=v;return true;}
 string ObjectGetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING,int){auto it=g_texts.find(n);return it==g_texts.end()?"":it->second;}
 // Line-canvas fills are recorded on demand, so a test can see which lines were drawn.
-struct RecRect{int x0,y0,x1,y1;};static std::vector<RecRect> g_rects;static bool g_rec=false;
-void CCanvas::FillRectangle(int x1,int y1,int x2,int y2,uint){if(g_rec && this==&g_line_canvas)g_rects.push_back({x1,y1,x2,y2});}
-static int RowPieces(int y,int xa,int xb){int n=0;for(auto& r:g_rects)if(r.y0==y && r.y1==y && r.x1>=xa && r.x0<=xb)n++;return n;}
+struct RecRect{int x0,y0,x1,y1;uint c;bool fill;};static std::vector<RecRect> g_rects;static bool g_rec=false;
+void CCanvas::FillRectangle(int x1,int y1,int x2,int y2,uint c)
+  {if(g_rec && (this==&g_line_canvas || this==&g_fill_canvas))g_rects.push_back({x1,y1,x2,y2,c,this==&g_fill_canvas});}
+static int RowPieces(int y,int xa,int xb){int n=0;for(auto& r:g_rects)if(!r.fill && r.y0==y && r.y1==y && r.x1>=xa && r.x0<=xb)n++;return n;}
+// Colour left on the shading canvas at (x,y): the last recorded fill there wins, as on a canvas.
+static uint FillAt(int x,int y){uint c=0;for(auto& r:g_rects)if(r.fill && r.x0<=x && x<=r.x1 && r.y0<=y && y<=r.y1)c=r.c;return c;}
+// Reference ARGB of an MQL colour (0x00BBGGRR) and reference "over" of two ARGB colours.
+static uint RefARGB(color c,int a){return ((uint)a<<24)|((uint)(c&255)<<16)|((uint)((c>>8)&255)<<8)|(uint)((c>>16)&255);}
+static uint RefOver(uint lower,uint upper)
+  {
+   double al=(lower>>24)/255.0,au=(upper>>24)/255.0,a=au+al*(1-au);
+   uint out=(uint)std::lround(a*255)<<24;
+   for(int sh=0;sh<=16;sh+=8){double c=(((upper>>sh)&255)*au+((lower>>sh)&255)*al*(1-au))/a;out|=(uint)std::lround(c)<<sh;}
+   return out;
+  }
+static bool Near(uint a,uint b,int tol=2){for(int sh=0;sh<=24;sh+=8)if(std::abs((int)((a>>sh)&255)-(int)((b>>sh)&255))>tol)return false;return true;}
 // Projection: 1 px per minute from g_xy_t0; price 1.2 at y=0, 3000 px per price unit.
 static long g_xy_t0=0;
 bool ChartTimePriceToXY(long,int,datetime t,double p,int& x,int& y){x=(int)((t-g_xy_t0)/60);y=(int)std::lround((1.2-p)*3000);return true;}
@@ -180,6 +193,19 @@ int main()
     FPZoneConfig old;CHECK(FPZReadFile("old.zones",old) && old.count==2);
     CHECK(old.zones[0].midline && old.zones[0].stack==0 && old.zones[0].distance==0);   // top-edge marker: distance reset
     CHECK(old.zones[1].midline && old.zones[1].distance==6);                            // above-high marker keeps its gap
+    CHECK(old.cut==1 && old.fib_lower==0);                                              // no bits: Half, Full
+   }
+   {FPZoneConfig d;FPZoneDefaults(d,false);CHECK(d.cut==1 && d.fib_lower==0 && FPZ_SCHEMA==2);
+    for(int cut=0;cut<3;cut++)for(int fl=0;fl<3;fl++)
+      {
+       d.cut=cut;d.fib_lower=fl;CHECK(FPZWriteFile("cut.zones",d));
+       FPZoneConfig r;CHECK(FPZReadFile("cut.zones",r) && r.cut==cut && r.fib_lower==fl && r.alert_push==d.alert_push && r.hover==d.hover);
+       // Earlier versions read flags bits 0-10 only; the defaults leave the new bits at 0,
+       // exactly as 1.63 writes them.
+       int flags=(int)((uchar)g_disk["cut.zones"][8]|((uchar)g_disk["cut.zones"][9]<<8)|((uchar)g_disk["cut.zones"][10]<<16)|((uchar)g_disk["cut.zones"][11]<<24));
+       CHECK((flags&2047)==((d.enabled?1:0)|(d.upcoming?2:0)|(d.fill?4:0)|(d.gradient?8:0)|(d.fade_old?16:0)|(d.lines_full?32:0)|(d.declutter?64:0)|(d.highlight?128:0)|(d.hover?256:0)|(d.alert_sound?512:0)|(d.alert_push?1024:0)));
+       if(cut==1 && fl==0)CHECK((flags>>11)==0);
+      }
    }
    CHECK(FPZWriteFile("t.zones",cfg));
    FPZoneConfig back;CHECK(FPZReadFile("t.zones",back));
@@ -237,12 +263,44 @@ int main()
 
    // ---- compositing: translucent layers blend instead of overwriting
    {MQLArr<FPLayer> layers;layers.v.resize(2);
-    layers[0].x0=0;layers[0].x1=9;layers[0].y0=0;layers[0].y1=9;layers[0].ink=0xFF0000;layers[0].a0=.5;layers[0].a1=.5;   // blue
-    layers[1].x0=5;layers[1].x1=14;layers[1].y0=0;layers[1].y1=9;layers[1].ink=0x0000FF;layers[1].a0=.5;layers[1].a1=.5;  // red on top
+    FPLayerSet(layers[0],0,9,0,9,(color)0xFF0000,(color)0xFF0000,.5,.5,0);     // blue
+    FPLayerSet(layers[1],5,14,0,9,(color)0x0000FF,(color)0x0000FF,.5,.5,0);    // red on top
     MQLArr<FPSeg> segs;int n=FPComposeSegments(layers,2,100,100,segs);
     CHECK(n==3 && segs[1].x0==5 && segs[1].x1==9 && segs[1].argb==0xBFAA0055 && segs[0].argb==0x800000FF && segs[2].argb==0x80FF0000);
-    layers[0].ink=0x0000FF;layers[1].ink=0xFF0000;                   // red under blue: order matters
+    CHECK(segs[0].argb1==segs[0].argb && segs[1].argb1==segs[1].argb);        // flat cells
+    layers[0].ink=0x0000FF;layers[0].ink2=0x0000FF;layers[1].ink=0xFF0000;layers[1].ink2=0xFF0000;   // red under blue: order matters
     n=FPComposeSegments(layers,2,100,100,segs);CHECK(n==3 && segs[1].argb==0xBF5500AA);
+    // A Fib fill (kind 1) under zone shading (kind 0): the cut removes part of the Fib's
+    // opacity inside the zone only.
+    FPLayerSet(layers[0],0,9,0,9,(color)0xFF0000,(color)0xFF0000,.5,.5,1);     // blue Fib
+    FPLayerSet(layers[1],5,14,0,9,(color)0x0000FF,(color)0x0000FF,.5,.5,0);    // red zone on top
+    n=FPComposeSegments(layers,2,100,100,segs,0.0);CHECK(n==3 && segs[1].argb==0xBFAA0055);
+    n=FPComposeSegments(layers,2,100,100,segs,0.5);CHECK(n==3 && segs[1].argb==0x9FCC0033 && segs[0].argb==0x800000FF);
+    n=FPComposeSegments(layers,2,100,100,segs,1.0);CHECK(n==3 && segs[1].argb==0x80FF0000 && segs[0].argb==0x800000FF);
+    // A colour gradient: the cell keeps its top and bottom colours, drawn row by row.
+    FPLayerSet(layers[0],0,9,0,10,(color)0x0000FF,(color)0xFF0000,1,1,1);     // red at the top, blue at the bottom
+    n=FPComposeSegments(layers,1,100,100,segs);CHECK(n==1 && segs[0].argb==0xFFFF0000 && segs[0].argb1==0xFF0000FF);
+    CHECK(FPLerpARGB(0xFFFF0000,0xFF0000FF,0.5)==0xFF800080);
+    g_rects.clear();g_rec=true;DrawLayers(g_fill_canvas,layers,1,100,100);g_rec=false;
+    CHECK(g_rects.size()==11 && FillAt(3,0)==0xFFFF0000 && FillAt(3,10)==0xFF0000FF && FillAt(3,5)==0xFF800080);
+    // At low opacity a tall gradient needs few bands, and every band stays within one
+    // visible step of the exact row colour.
+    FPLayerSet(layers[0],0,9,0,599,(color)0x0000FF,(color)0xFF0000,.12,.12,1);
+    g_rects.clear();g_rec=true;DrawLayers(g_fill_canvas,layers,1,100,1000);g_rec=false;
+    {bool ok=g_rects.size()<=40;
+     for(int y=0;y<600 && ok;y+=7)
+       {
+        uint got=FillAt(3,y),want=RefARGB(FPBlend((color)0x0000FF,(color)0xFF0000,y/599.0),31);
+        ok=((got>>24)==31);
+        for(int sh=0;sh<=16 && ok;sh+=8)ok=std::abs((int)((got>>sh)&255)-(int)((want>>sh)&255))*31/255<=1;
+       }
+     CHECK(ok);}
+    // A zone's opacity gradient: few bands, each one step of opacity or less from the next.
+    FPLayerSet(layers[0],0,9,0,1079,(color)0x00AAFF,(color)0x00AAFF,.08,.012,0);
+    g_rects.clear();g_rec=true;DrawLayers(g_fill_canvas,layers,1,100,1080);g_rec=false;
+    {bool ok=g_rects.size()>=10 && g_rects.size()<=30 && (FillAt(3,0)>>24)>=19 && (FillAt(3,1079)>>24)<=4;
+     for(int y=1;y<1080 && ok;y++)ok=std::abs((int)(FillAt(3,y)>>24)-(int)(FillAt(3,y-1)>>24))<=1;
+     CHECK(ok);}
     }
 
    // ---- marker strips: every zone has its own rectangle; overlaps step apart; placement honoured
@@ -362,6 +420,63 @@ int main()
    for(int i=0;i<200;i++){g_zmark_n=0;Render();}                       // repeated frames stay stable
    CHECK(g_zmark_n>0);
 
+   // ---- shading (1.64): Fib and zone fills blend in one pass, zones on top
+   {
+    auto fibrect=[&](int slot,ENUM_TIMEFRAMES tf,color ink,int opacity,long x0,long x1,double p0,double p1)
+      {
+       FPSetup &s=g_sets[slot];MakeFib(s,900+slot,"Shade",false,tf);
+       s.ta=(datetime)(g_xy_t0+x0*60);s.tb=(datetime)(g_xy_t0+x1*60);s.left=s.ta;s.right=s.tb;s.pa=p0;s.pb=p1;
+       s.fill=true;s.fill_rays=false;s.gradient=false;s.fill_top=ink;s.fill_bottom=ink;s.opacity=opacity;
+      };
+    auto shade=[&](){g_rects.clear();g_rec=true;g_fill_sig=0;g_dirty=true;Render();g_rec=false;};
+    g_selected=-1;g_editor=false;
+    // A red H4 range over the London KZ column (x 478-657); y 270-330.
+    fibrect(0,PERIOD_H4,(color)0x0000FF,30,240,840,1.11,1.09);g_count=1;
+    g_zact.cut=0;shade();
+    uint fib=FillAt(420,300),zone=FillAt(560,100),both=FillAt(560,300);
+    CHECK(fib!=0 && zone!=0 && both!=0 && fib!=both);
+    CHECK(Near(both,RefOver(fib,zone)));                                   // the killzone blends over the range
+    g_zact.cut=2;shade();CHECK(FillAt(560,300)==zone && FillAt(420,300)==fib); // Clear: no Fib shading inside zones
+    g_zact.cut=1;shade();{uint half=FillAt(560,300);CHECK((half>>24)>(zone>>24) && (half>>24)<(both>>24));}
+    // Changing a setting alone redraws the shading (no forced redraw here).
+    auto frame=[&](){g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;};
+    g_zact.cut=2;frame();CHECK(FillAt(560,300)==zone);
+    g_zact.fib_lower=2;frame();CHECK(FillAt(420,300)==0);
+    g_sets[0].source_tf=PERIOD_M5;frame();CHECK(FillAt(420,300)==fib);          // its own timeframe changes the outcome
+    g_sets[0].source_tf=PERIOD_H4;g_zact.fib_lower=0;g_zact.cut=1;
+    // Order: the weekly range underneath, the H4 range on top, whatever the list order.
+    g_zact.enabled=false;g_zact.cut=1;
+    fibrect(1,PERIOD_W1,(color)0xFF0000,30,600,1100,1.10,1.08);g_count=2;  // blue weekly, y 300-360
+    shade();
+    uint red=FillAt(420,300),blue=FillAt(1000,350),mix=FillAt(700,320);
+    CHECK(red!=0 && blue!=0 && Near(mix,RefOver(blue,red)) && !Near(mix,RefOver(red,blue)));
+    // Same timeframe: list order, the selected Fib on top.
+    g_sets[1].source_tf=PERIOD_H4;shade();CHECK(Near(FillAt(700,320),RefOver(red,blue)));
+    g_selected=0;shade();CHECK(Near(FillAt(700,320),RefOver(blue,red)));g_selected=-1;
+    // Below a Fib's own timeframe (this chart is M5): Full, Faint (a third) or Off.
+    g_count=1;fibrect(0,PERIOD_H4,(color)0x0000FF,60,240,840,1.11,1.09);
+    g_zact.fib_lower=0;shade();CHECK((FillAt(420,300)>>24)==153);
+    CHECK(FibShadeFactor(g_sets[0])==1.0);
+    g_zact.fib_lower=1;shade();CHECK((FillAt(420,300)>>24)==51);
+    g_zact.fib_lower=2;shade();CHECK(FillAt(420,300)==0);
+    g_sets[0].source_tf=PERIOD_M5;shade();CHECK((FillAt(420,300)>>24)==153); // drawn on this timeframe: as set
+    g_sets[0].source_tf=PERIOD_M1;shade();CHECK((FillAt(420,300)>>24)==153); // drawn on a lower one: as set
+    g_zact.fib_lower=0;
+    // A gradient fill keeps its exact colour on every row.
+    fibrect(0,PERIOD_H4,(color)0x0000FF,100,240,840,1.11,1.09);g_sets[0].gradient=true;g_sets[0].fill_bottom=(color)0xFF0000;
+    shade();
+    for(int y=270;y<=330;y+=10)CHECK(Near(FillAt(420,y),RefARGB(FPBlend((color)0x0000FF,(color)0xFF0000,(y-270)/60.0),255),1));
+    // A range running off the top of the chart keeps its gradient anchored to its real top.
+    fibrect(0,PERIOD_H4,(color)0x0000FF,100,240,840,1.25,1.09);g_sets[0].gradient=true;g_sets[0].fill_bottom=(color)0xFF0000;   // y -150..330
+    shade();
+    CHECK(Near(FillAt(420,0),RefARGB(FPBlend((color)0x0000FF,(color)0xFF0000,150/480.0),255),1));
+    fibrect(0,PERIOD_H4,(color)0x0000FF,100,240,840,1.11,1.09);g_sets[0].gradient=true;g_sets[0].fill_bottom=(color)0xFF0000;
+    // ... and still does under a zone, where the zone blends on top.
+    g_zact.enabled=true;g_zact.cut=0;shade();
+    CHECK(Near(FillAt(560,280),RefOver(RefARGB(FPBlend((color)0x0000FF,(color)0xFF0000,10/60.0),255),FillAt(560,100))));
+    g_count=0;g_zact=g_zcfg;g_dirty=true;Render();
+   }
+
    // ---- Zones window: tabs, table edits, popups, palette, presets, apply
    g_zstore="mem.zones";SaveZones();CHECK(FileIsExist("mem.zones",0));
    OpenZones();CHECK(g_zeditor && g_zedit.count==33);
@@ -418,6 +533,10 @@ int main()
     CloseZones();HandlePointer(cx,cy,false);CHECK(!g_scroll_held);OpenZones();      // not without the window
     g_zedit.zones[lz].label=ol;
     g_zedit.zones[lz].marker=om;g_zedit.zones[lz].distance=od;g_zedit.zones[lz].stack=os;ZonePreview(false);}
+   {int keep_rows=g_rows;g_rows=6;g_ztab=2;g_ui_dirty=true;BuildUI();                       // smallest window
+    int note=RegFind(UIS("Z.FillNote")),save=RegFind(UIS("Z.Save"));
+    CHECK(RegFind(UIS("Z.Cut2"))>=0 && RegFind(UIS("Z.Ftf2"))>=0 && note>=0 && save>=0 && g_reg[note].y+U(16)<=g_reg[save].y);
+    g_rows=keep_rows;}
    for(int t=0;t<4;t++){g_ztab=t;g_ui_dirty=true;BuildUI();}
    CHECK(RegFind(UIS("Z.Tab3"))>=0 && RegFind(UIS("Z.Name0"))>=0 && RegFind(UIS("T.Zones"))>=0);
    CHECK(HitUI(g_panel_x+U(400),g_panel_y+U(100)));
@@ -441,14 +560,17 @@ int main()
    ZonesClick("Grp2");CHECK(g_zedit.group_on[2]);
    ZonesClick("TfDn3");CHECK(g_zedit.group_tf[3]==3);
    ZonesClick("Mode2");CHECK(g_zedit.fill_mode==2);
+   ZonesClick("Cut2");CHECK(g_zedit.cut==2 && g_zact.cut==2 && g_zcfg.cut==1);         // live preview, not committed
+   ZonesClick("Ftf1");CHECK(g_zedit.fib_lower==1 && g_zact.fib_lower==1);
    CHECK(g_zcfg.zones[1].ink!=clrRed);                                   // nothing committed yet
    PresetBrowser(false);CHECK(g_preset_zones && g_preset_count==2 && g_preset_names[0]==FPZ_BUILTIN_FX);
    ObjectSetString(0,Obj("R.Name"),OBJPROP_TEXT,FPZ_BUILTIN_IDX);PresetDelete();CHECK(g_preset_count==2 && g_texts[Obj("R.Message")]=="Built-in presets can't be deleted.");
    ClosePopup();
    ZonesClick("Apply");CHECK(g_zcfg.zones[1].ink==clrRed && g_zcfg.broker_mode==3 && g_zeditor);
-   FPZoneConfig reread;CHECK(FPZReadFile("mem.zones",reread) && reread.zones[1].ink==clrRed);
+   FPZoneConfig reread;CHECK(FPZReadFile("mem.zones",reread) && reread.zones[1].ink==clrRed && reread.cut==2 && reread.fib_lower==1);
    g_preset_name=FPZ_BUILTIN_IDX;g_preset_save=false;ZonePresetAction();
    CHECK(g_zedit.zones[FindZone(g_zedit,"NY AM KZ (indices)")].enabled && g_zedit.broker_mode==3); // broker time kept
+   CHECK(g_zedit.cut==2 && g_zedit.fib_lower==1);                                       // and the Fib-shading settings
    ZonesClick("Cancel");CHECK(!g_zeditor && g_zact.zones[1].ink==clrRed);
    g_zcfg.enabled=true;ToggleZonesShown();CHECK(!g_zcfg.enabled);ToggleZonesShown();CHECK(g_zcfg.enabled);
 
