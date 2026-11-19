@@ -17,7 +17,9 @@ void ChartRedraw(long){}bool ChartSetInteger(long,ENUM_CHART_PROPERTY_INTEGER,lo
 #ifndef TEST_OWN_XY
 bool ChartTimePriceToXY(long,int,datetime,double,int& x,int& y){x=0;y=0;return false;}
 #endif
+#ifndef TEST_OWN_XYTP
 bool ChartXYToTimePrice(long,int,int,int& s,datetime& t,double& p){s=-1;t=0;p=0;return false;}
+#endif
 uint ColorToARGB(color c,uchar a){return ((uint)a<<24)|(uint)(c&0xFFFFFF);}
 int CopyRates(const string&,ENUM_TIMEFRAMES,int,int,MQLArr<MqlRates>&){return 0;}
 void EventKillTimer(){}bool EventSetMillisecondTimer(int){return true;}

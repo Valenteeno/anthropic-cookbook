@@ -12,6 +12,9 @@ for line in src.split("\n"):
     out.append(line)
 code = "\n".join(out)
 
+# MQL5 colour literals C'r,g,b' become plain colour values (0x00BBGGRR).
+code = re.sub(r"C'(\d+),\s*(\d+),\s*(\d+)'", lambda m: "((color)%d)" % (int(m.group(1)) | int(m.group(2)) << 8 | int(m.group(3)) << 16), code)
+
 # Array reference parameters and dynamic arrays.
 code = re.sub(r"\b(const\s+)?(\w+)\s*&\s*(\w+)\[\]", r"\1MQLArr<\2> &\3", code)
 code = re.sub(r"\b(?!return\b)([A-Za-z_]\w*)\s+([A-Za-z_]\w*)\[\];", r"MQLArr<\1> \2;", code)

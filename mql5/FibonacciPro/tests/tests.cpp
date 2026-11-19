@@ -1,4 +1,4 @@
-// Behavioural tests for Fibonacci_Pro_10.mq5 (1.64), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_11.mq5 (1.65), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
@@ -6,12 +6,14 @@
 #define TEST_OWN_ALERTS
 #define TEST_OWN_OBJGET
 #define TEST_OWN_CANVAS
+#define TEST_OWN_XYTP
 #include "fp5.cpp"
 #include <cstdio>
 #include <cstring>
 #include <map>
 #include <algorithm>
 #include <cstdlib>
+#include <array>
 #include "mql5_defaults.h"
 // --- stubs the tests observe
 string _Symbol="EURUSD";int _Digits=5;double _Point=0.00001;int _Period=PERIOD_H1;
@@ -43,6 +45,7 @@ static bool Near(uint a,uint b,int tol=2){for(int sh=0;sh<=24;sh+=8)if(std::abs(
 // Projection: 1 px per minute from g_xy_t0; price 1.2 at y=0, 3000 px per price unit.
 static long g_xy_t0=0;
 bool ChartTimePriceToXY(long,int,datetime t,double p,int& x,int& y){x=(int)((t-g_xy_t0)/60);y=(int)std::lround((1.2-p)*3000);return true;}
+bool ChartXYToTimePrice(long,int x,int y,int& s,datetime& t,double& p){s=0;t=(datetime)(g_xy_t0+60L*x);p=1.2-y/3000.0;return true;}
 static datetime g_test_now=0;
 datetime TimeTradeServer(){return g_test_now;}datetime TimeGMT(){return g_test_now-2*3600;}datetime TimeCurrent(){return g_test_now;}
 static std::vector<MqlRates> g_bars;
@@ -573,6 +576,210 @@ int main()
    CHECK(g_zedit.cut==2 && g_zedit.fib_lower==1);                                       // and the Fib-shading settings
    ZonesClick("Cancel");CHECK(!g_zeditor && g_zact.zones[1].ink==clrRed);
    g_zcfg.enabled=true;ToggleZonesShown();CHECK(!g_zcfg.enabled);ToggleZonesShown();CHECK(g_zcfg.enabled);
+
+   // ---- drawing types (1.65): detection from the two anchors
+   auto bars=[](std::vector<std::array<double,4>> v)
+     {MQLArr<MqlRates> r;for(size_t i=0;i<v.size();i++){MqlRates m{};m.time=(datetime)(3600000+3600*i);m.open=v[i][0];m.high=v[i][1];m.low=v[i][2];m.close=v[i][3];r.v.push_back(m);}return r;};
+   auto kind=[](MQLArr<MqlRates>& c,int ia,double pa,int ib,double pb,int want,int want_dir)
+     {int dir=-1;int k=FPDetectKind(c,ia,pa,ib,pb,1e-6,dir);return k==want && dir==want_dir;};
+   {
+    auto fvg=bars({{100,101.2,99.2,100.8},{100.8,101.5,99.9,100.4},{100.4,102,100.1,101.6},{101.4,106,101.2,105.6},{105.3,107,103.4,106.6}});
+    CHECK(kind(fvg,2,102,4,103.4,FPK_FVG,1));
+    CHECK(kind(fvg,4,103.4,2,102,FPK_FVG,1));                              // either drawing direction
+    CHECK(kind(fvg,2,102.5,4,103.4,FPK_NONE,0));                           // an anchor off the candle's prices
+    auto fvgd=bars({{106,106.8,105.6,106.4},{106.4,106.9,105.9,106.1},{106.1,106.4,105,105.3},{105.5,105.7,101.4,101.8},{101.9,103.6,101,101.4}});
+    CHECK(kind(fvgd,2,105,4,103.6,FPK_FVG,2));
+    auto vi=bars({{100,100.8,99.3,99.6},{99.6,100.5,99,100.2},{100.2,101.9,100,101.6},{102.6,104,101.8,103.7}});
+    CHECK(kind(vi,2,101.6,3,102.6,FPK_VI,1));
+    CHECK(kind(vi,2,101.6,3,101.8,FPK_NONE,0));                            // body to wick is not an imbalance
+    CHECK(kind(vi,2,101.9,3,101.8,FPK_KR,0));                              // a high and a lower low: a (small) key range
+    auto uf=bars({{100,100.9,99.4,100.6},{100.6,101,99.8,100.2},{100.2,101.6,99.9,101.3},{101.1,105,100.9,104.6},{105.2,106.4,103,106}});
+    CHECK(kind(uf,2,101.6,4,105.2,FPK_UFVG,1));                            // the FVG plus its imbalance
+    CHECK(kind(uf,2,101.6,4,103,FPK_FVG,1));                               // just the FVG's own edges
+    CHECK(kind(uf,2,101.3,4,105.2,FPK_UFVG,1));                            // body edge to body edge with one imbalance
+    auto nogap=bars({{100,100.6,99.4,100.3},{100.3,101.9,100.1,101.2},{101.5,103.4,101.3,103},{102.9,104.2,101.7,103.9}});
+    CHECK(kind(nogap,1,101.2,3,102.9,FPK_NONE,0));                         // one imbalance and no FVG: nothing
+    auto ufd=bars({{106,106.6,105.5,106.2},{106.2,106.5,105.2,105.6},{105.2,105.4,101.6,102},{102.1,103.8,101.2,101.5}});
+    CHECK(kind(ufd,1,105.6,3,103.8,FPK_UFVG,2));
+    auto spb=bars({{100,100.7,99.3,100.5},{100.5,100.9,99.9,100.1},{100.1,101.5,99.8,101.2},{101.6,105,101.3,104.6},{105.1,106.3,103,105.9}});
+    CHECK(kind(spb,2,101.2,4,105.1,FPK_SPB,1));                            // outer edge to outer edge of the two imbalances
+    CHECK(kind(spb,2,101.5,4,103,FPK_FVG,1));
+    auto spb2=bars({{100,100.6,99.4,100.3},{100.3,101.9,100.1,101.2},{101.5,103.4,101.3,103},{103.3,104.2,101.7,103.9}});
+    CHECK(kind(spb2,1,101.2,3,103.3,FPK_SPB,1));                           // no FVG needed: candles 1 and 3 overlap
+    auto ob=bars({{103,103.4,101.9,102.2},{102.2,102.6,100.8,101.1},{101.1,101.5,99.6,100.4}});
+    CHECK(kind(ob,2,99.6,2,101.1,FPK_OB,1));                               // down-close candle, low to open
+    CHECK(kind(ob,2,99.6,2,101.5,FPK_OB,1));                               // high to low
+    CHECK(kind(ob,2,100.4,2,101.1,FPK_OB,1));                              // body only
+    CHECK(kind(ob,2,101.5,2,100.4,FPK_OB,1));                              // high to close: body and upper wick
+    auto obu=bars({{99,100.2,98.7,99.9},{99.9,101.1,99.6,100.8},{100.8,102.5,100.5,101.9}});
+    CHECK(kind(obu,2,102.5,2,100.8,FPK_OB,2));                             // up-close candle, high to open
+    auto pw=bars({{101.7,102.6,101.4,102.4},{102.4,105.2,101.6,101.9}});
+    CHECK(kind(pw,1,105.2,1,102.4,FPK_PW,0));
+    auto dw=bars({{102.7,103,102,102.3},{102.2,103.2,99,102.9}});
+    CHECK(kind(dw,1,99,1,102.2,FPK_DW,0));
+    auto kr=bars({{101,101.4,99.6,99.9},{99.9,100.3,98.8,100.1},{100.1,101.9,99.8,101.6},{101.6,103,101.2,102.7},{102.7,104.4,102.3,104}});
+    CHECK(kind(kr,1,98.8,4,104.4,FPK_KR,0) && kind(kr,4,104.4,1,98.8,FPK_KR,0));
+    CHECK(kind(kr,1,100.3,4,102.3,FPK_NONE,0));                            // a high below a low across 4 candles
+    CHECK(kind(kr,4,104.4,-1,0,FPK_KH,0) && kind(kr,1,98.8,-1,0,FPK_KL,0) && kind(kr,1,99.9,-1,0,FPK_NONE,0));
+   }
+   // ---- factory styles, colours by timeframe, names
+   {
+    FPSetup f;FPFactoryStyle(FPK_FVG,f);
+    bool ok=f.count==12 && !f.fill && f.ray_right && f.label_h==1 && f.label_float && f.base_color==clrNONE && !f.diagonal;
+    double want[]={0,.125,.25,.375,.5,.62,.625,.705,.75,.79,.875,1};
+    int style[]={STYLE_DASH,STYLE_DASHDOTDOT,STYLE_DASHDOT,STYLE_DASHDOTDOT,STYLE_DOT,STYLE_SOLID,STYLE_DASHDOTDOT,STYLE_SOLID,STYLE_DASHDOT,STYLE_SOLID,STYLE_DASHDOTDOT,STYLE_DASH};
+    bool on[]={true,false,true,false,true,false,false,false,true,false,false,true};
+    for(int i=0;i<12 && ok;i++)ok=f.levels[i].value==want[i] && f.levels[i].style==style[i] && f.levels[i].enabled==on[i];
+    CHECK(ok);
+    CHECK(f.levels[0].description=="%n" && f.levels[5].description=="62" && f.levels[7].description=="70.5" && f.levels[9].description=="79" && f.levels[4].description=="");
+    CHECK(f.levels[5].ink==clrWhite && f.levels[7].ink==clrWhite && f.levels[9].width==1);
+    FPSetup o;FPFactoryStyle(FPK_OB,o);CHECK(o.levels[0].style==STYLE_SOLID && o.levels[11].style==STYLE_SOLID && o.levels[2].style==STYLE_DASHDOT && o.levels[4].style==STYLE_DOT);
+    FPSetup k;FPFactoryStyle(FPK_KH,k);CHECK(k.hline && k.count==1 && k.levels[0].style==STYLE_SOLID && k.levels[0].description=="%n");
+    CHECK(FPTierColor(PERIOD_MN1)==InpColorMN && FPTierColor(PERIOD_W1)==InpColorW1 && FPTierColor(PERIOD_D1)==InpColorD1);
+    CHECK(FPTierColor(PERIOD_H12)==InpColorH4 && FPTierColor(PERIOD_H4)==InpColorH4 && FPTierColor(PERIOD_H3)==InpColorH1 && FPTierColor(PERIOD_H1)==InpColorH1);
+    CHECK(FPTierColor(PERIOD_M30)==InpColorM15 && FPTierColor(PERIOD_M15)==InpColorM15 && FPTierColor(PERIOD_M12)==InpColorM5 && FPTierColor(PERIOD_M5)==InpColorM5);
+    CHECK(FPTierColor(PERIOD_M4)==InpColorM1 && FPTierColor(PERIOD_M1)==InpColorM1);
+    CHECK(FPTierWidth(PERIOD_MN1)==2 && FPTierWidth(PERIOD_D1)==2 && FPTierWidth(PERIOD_H12)==1 && FPTierWidth(PERIOD_M1)==1);
+    CHECK(InpColorMN==(color)(255|102<<8|184<<16) && InpColorM1==(color)(140|140<<8|140<<16));   // the measured palette
+    CHECK(FPLevelNumber(.705)=="70.5" && FPLevelNumber(.62)=="62");
+   }
+   // ---- created drawings: type, direction, name, colours, widths, the tag on top
+   g_bars.clear();
+   {
+    double v[][4]={{106,106.8,105.6,106.4},{106.4,106.9,105.9,106.1},{106.1,106.4,105,105.3},{105.5,105.7,101.4,101.8},{101.9,103.6,101,101.4},{101.4,103,101.1,102.8},{102.8,104,102.6,103.9}};
+    for(int i=0;i<7;i++){MqlRates m{};m.time=(datetime)(7200000+i*14400);m.open=v[i][0];m.high=v[i][1];m.low=v[i][2];m.close=v[i][3];g_bars.push_back(m);}
+   }
+   FPSetup fv;NewSetup(fv);fv.source_tf=PERIOD_H4;fv.ta=g_bars[2].time;fv.pa=105;fv.tb=g_bars[4].time;fv.pb=103.6;fv.left=fv.ta;fv.right=fv.tb;
+   AutoType(fv);
+   CHECK(fv.kind==FPK_FVG && fv.dir==2 && fv.name.rfind("H4 FVG ",0)==0 && !fv.fill && fv.ray_right && fv.count==12);
+   CHECK(fv.levels[0].ink==InpColorH4 && fv.levels[0].width==1 && fv.levels[5].ink==clrWhite && fv.base_color==InpColorH4);
+   CHECK(fv.levels[11].description=="%n" && fv.levels[0].description=="");    // 100% (candle 1's low) is the upper edge here
+   CHECK(LevelText(fv.levels[11],105,fv.name)==fv.name);
+   {
+    FPSetup d;NewSetup(d);d.source_tf=PERIOD_D1;d.ta=g_bars[2].time;d.pa=105;d.tb=g_bars[4].time;d.pb=103.6;d.left=d.ta;d.right=d.tb;AutoType(d);
+    CHECK(d.levels[0].width==2 && d.levels[0].ink==InpColorD1 && d.levels[5].width==1 && d.name.rfind("D1 FVG",0)==0);
+    FPSetup u;NewSetup(u);u.source_tf=PERIOD_H4;u.ta=g_bars[1].time;u.pa=106.5;u.tb=g_bars[3].time;u.pb=102;u.left=u.ta;u.right=u.tb;AutoType(u);
+    CHECK(u.kind==FPK_NONE && u.levels[0].style==STYLE_SOLID && u.name=="H4 Fib");                 // unmatched: KR style
+    // A line drawn on a template's 50% level keeps its price once it becomes a one-level KH.
+    FPSetup l;NewSetup(l);l.source_tf=PERIOD_H1;l.hline=true;l.count=1;DefaultLevel(l.levels[0],.5);
+    l.pb=106.4;l.pa=107.4;l.left=g_bars[1].time;l.right=l.left+36000;l.ta=l.left;l.tb=l.right;l.ray_right=true;
+    AutoType(l);
+    CHECK(l.kind==FPK_KH && l.count==1 && LineLevel(l)==0 && std::fabs(FPLevelPrice(l.pa,l.pb,l.levels[0].value)-106.9)<1e-9 && l.name=="H1 KH" && l.ray_right);
+    FPSetup ld;NewSetup(ld);ld.source_tf=PERIOD_H1;ld.hline=true;ld.count=1;DefaultLevel(ld.levels[0],0);
+    ld.pb=106.9;ld.pa=107.9;ld.left=g_bars[1].time;ld.right=ld.left+36000;ld.ta=ld.left;ld.tb=ld.right;ld.ray_right=false;
+    AutoType(ld);CHECK(ld.kind==FPK_KH && !ld.ray_right);                     // a line dragged to length stays that length
+    FPSetup mn;NewSetup(mn);mn.source_tf=PERIOD_MN1;mn.kind=FPK_KR;CHECK(FPDefaultName(mn)=="MN KR");
+    mn.source_tf=PERIOD_H4;mn.kind=FPK_FVG;mn.dir=1;CHECK(FPDefaultName(mn)=="H4 FVG "+Glyph(0x25B2));
+    mn.dir=2;CHECK(FPDefaultName(mn)=="H4 FVG "+Glyph(0x25BC));mn.dir=0;CHECK(FPDefaultName(mn)=="H4 FVG");
+   }
+   // ---- saved with the drawing; files from earlier versions read as untyped and unused
+   {
+    FPSetup a=fv;a.kind=FPK_KR;a.dir=1;a.used=true;a.used_ray=true;
+    int f=FileOpen("rt.bin",FILE_WRITE|FILE_BIN,'\t',0);WriteSetup(f,a);FileWriteInteger(f,0,4);FileClose(f);
+    FPSetup b;f=FileOpen("rt.bin",FILE_READ|FILE_BIN,'\t',0);bool ok=ReadSetup(f,b);FileClose(f);
+    CHECK(ok && b.kind==FPK_KR && b.dir==1 && b.used && b.used_ray && b.name==a.name);
+    a.kind=FPK_NONE;a.dir=0;a.used=false;a.used_ray=false;
+    f=FileOpen("rt.bin",FILE_WRITE|FILE_BIN,'\t',0);WriteSetup(f,a);FileWriteInteger(f,0,4);FileClose(f);
+    f=FileOpen("rt.bin",FILE_READ|FILE_BIN,'\t',0);ok=ReadSetup(f,b);FileClose(f);
+    CHECK(ok && b.kind==FPK_NONE && !b.used);
+   }
+   // ---- used: stops at the first candle that traded into it, fades, and extends again
+   {
+    datetime keep_now=g_test_now;g_test_now=g_bars[6].time+60;
+    FPSetup s=fv;MarkUsed(s,true);
+    CHECK(s.used && s.used_ray && !s.ray_right && s.right==g_bars[6].time);   // bar 6 is the first back into the gap
+    MarkUsed(s,false);CHECK(!s.used && s.ray_right);
+    FPSetup r=fv;r.kind=FPK_KR;MarkUsed(r,true);CHECK(r.used && r.right>r.left);   // a range stops at the latest bar
+    MQLArr<string> lines;color accent=clrNONE;FibTip(s,0,lines,accent);
+    bool status=false;for(int q=0;q<ArraySize(lines);q++)if(lines[q]=="Status\tUsed")status=true;CHECK(!status);
+    MarkUsed(s,true);FibTip(s,0,lines,accent);status=false;for(int q=0;q<ArraySize(lines);q++)if(lines[q]=="Status\tUsed")status=true;CHECK(status);
+    g_test_now=keep_now;
+    // A used drawing is drawn faded.
+    g_count=1;FPSetup &z=g_sets[0];MakeFib(z,77,"Faded",false,PERIOD_H1);
+    z.ta=(datetime)(g_xy_t0+60*100);z.tb=(datetime)(g_xy_t0+60*300);z.left=z.ta;z.right=z.tb;z.pa=1.14;z.pb=1.13;
+    auto alpha_at=[&](int y){int faded=0,full=0;for(auto& q:g_rects)if(!q.fill && q.y0<=y && y<=q.y1 && q.x0>=100 && q.x1<=300){if((q.c>>24)==FP_USED_ALPHA)faded++;else if((q.c>>24)==255)full++;}return std::make_pair(faded,full);};
+    z.used=true;g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;
+    auto u1=alpha_at(180);CHECK(u1.first>0 && u1.second==0);
+    z.used=false;g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;
+    auto u2=alpha_at(180);CHECK(u2.first==0 && u2.second>0);
+   }
+   // ---- Fibo levels tab: sort, all widths, level groups, drag a row, defaults, used
+   {
+    g_count=1;g_sets[0]=fv;g_selected=0;g_store="mem.bin";OpenEditor();CHECK(g_editor);
+    g_tab=2;g_page=0;g_ui_dirty=true;BuildUI();
+    CHECK(RegFind(UIS("E.Drag1"))>=0 && RegFind(UIS("E.Sort"))>=0 && RegFind(UIS("E.AllWidth"))>=0 && RegFind(UIS("E.Group2"))>=0);
+    Click(UIS("E.Sort"));Click(UIS("E.Sort"));
+    CHECK(g_edit.levels[0].value==1 && g_edit.levels[11].value==0);           // high to low
+    Click(UIS("E.Sort"));CHECK(g_edit.levels[0].value==0);
+    Click(UIS("E.AllWidth"));CHECK(g_popup==2 && g_popup_row==-1);DropdownChoice(2);ClosePopup();
+    {bool w3=true;for(int i=0;i<g_edit.count;i++)w3=w3 && g_edit.levels[i].width==3;CHECK(w3);}
+    CHECK(FPGroupState(g_edit,2)==2);Click(UIS("E.Group2"));CHECK(FPGroupState(g_edit,2)==1);
+    Click(UIS("E.Group2"));CHECK(FPGroupState(g_edit,2)==2);Click(UIS("E.Group3"));CHECK(FPGroupState(g_edit,3)==1);
+    g_ui_dirty=true;BuildUI();
+    double moved=g_edit.levels[1].value;
+    int ri=RegFind(UIS("E.Drag1"));CHECK(ri>=0);
+    if(ri>=0)
+      {
+       int hx=g_reg[ri].x+2,hy=g_reg[ri].y+2;
+       LevelDragMouse(hx,hy,true,false);CHECK(g_lvdrag && g_lvdrag_from==1);
+       LevelDragMouse(hx,LevelRowY(3)+5,true,true);CHECK(g_lvdrag_to==3 && RegFind(UIS("E.Drop"))>=0);
+       LevelDragMouse(hx,LevelRowY(3)+5,false,true);CHECK(!g_lvdrag && g_edit.levels[3].value==moved && RegFind(UIS("E.Drop"))<0);
+       Click(UIS("E.Sort"));CHECK(g_edit.levels[3].value==moved);              // the release does not click the button under it
+      }
+    g_ignore_editor_click_until=0;
+    Click(UIS("E.Defaults"));CHECK(g_edit.count==12 && g_edit.levels[1].value==.125 && g_edit.levels[1].width==1 && !g_edit.levels[1].enabled);
+    g_tab=0;g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("E.Used"))>=0);                 // the Common tab
+    Click(UIS("E.Used"));CHECK(g_edit.used && !g_edit.ray_right);g_ui_dirty=true;BuildUI();
+    Click(UIS("E.Used"));CHECK(!g_edit.used && g_edit.ray_right);
+    CloseEditor();
+   }
+   // ---- built-in presets: installed once, deletable, restorable; they colour by timeframe
+   {
+    string folder="FibonacciPro\\Presets\\";
+    for(int i=0;i<FP_BUILTIN_COUNT;i++)g_disk.erase(folder+FPBuiltinName(i)+".fpp");
+    g_disk.erase(FP_BUILTIN_MARKER);
+    FPInstallBuiltinsOnce();
+    bool all=FileIsExist(FP_BUILTIN_MARKER,0);for(int i=0;i<FP_BUILTIN_COUNT;i++)all=all && FileIsExist(folder+FPBuiltinName(i)+".fpp",0);CHECK(all);
+    g_disk.erase(folder+"VI.fpp");FPInstallBuiltinsOnce();CHECK(!FileIsExist(folder+"VI.fpp",0));   // a deleted built-in stays deleted
+    FPSetup ote;CHECK(ReadPreset(folder+"KR + OTE.fpp",ote) && FPGroupState(ote,3)==1 && ote.base_color==clrNONE);
+    g_count=1;g_sets[0]=fv;g_selected=0;OpenEditor();PresetBrowser(false);CHECK(RegFind(Obj("R.Restore"))>=0);
+    Click(Obj("R.Restore"));CHECK(!FileIsExist(folder+"VI.fpp",0));                // first click only asks
+    Click(Obj("R.Restore"));CHECK(FileIsExist(folder+"VI.fpp",0));
+    // Your own FVG preset is the style of new FVGs (here with the octants on).
+    FPSetup mine;FPFactoryStyle(FPK_FVG,mine);for(int i=0;i<mine.count;i++)if(FPInGroup(mine.levels[i].value,2))mine.levels[i].enabled=true;
+    CHECK(WritePreset(folder+"FVG.fpp",mine));
+    FPSetup s2;NewSetup(s2);s2.source_tf=PERIOD_H4;s2.ta=g_bars[2].time;s2.pa=105;s2.tb=g_bars[4].time;s2.pb=103.6;s2.left=s2.ta;s2.right=s2.tb;
+    AutoType(s2);CHECK(s2.kind==FPK_FVG && FPGroupState(s2,2)==1 && s2.levels[1].ink==InpColorH4);
+    // Loading a built-in colours by timeframe; a preset with its own colours keeps them.
+    ObjectSetString(0,Obj("R.Name"),OBJPROP_TEXT,"OB");PresetAction();
+    CHECK(g_edit.levels[0].style==STYLE_SOLID && g_edit.levels[0].ink==InpColorH4 && g_edit.base_color==InpColorH4);
+    FPSetup red;FPFactoryStyle(FPK_KR,red);red.base_color=clrRed;for(int i=0;i<red.count;i++)red.levels[i].ink=clrRed;
+    CHECK(WritePreset(folder+"Red.fpp",red));
+    PresetBrowser(false);ObjectSetString(0,Obj("R.Name"),OBJPROP_TEXT,"Red");PresetAction();CHECK(g_edit.levels[0].ink==clrRed);
+    // Saving from a drawing in its timeframe colour keeps the preset coloured by timeframe.
+    FPResetLevels(g_edit);CHECK(FPUsesTierInk(g_edit));
+    PresetBrowser(true);ObjectSetString(0,Obj("R.Name"),OBJPROP_TEXT,"Mine");PresetAction();
+    FPSetup back;CHECK(ReadPreset(folder+"Mine.fpp",back) && back.base_color==clrNONE);
+    ClosePopup();CloseEditor();
+   }
+   // ---- drawing with the mouse: the type, style and name arrive on release
+   {
+    g_count=0;g_selected=-1;g_editor=false;g_list=false;g_popup=0;g_store="mem.bin";g_owner=true;
+    Arm();CHECK(g_armed);
+    BeginMouse(200,180);MoveMouse(400,240);EndMouse(400,240);
+    CHECK(g_count==1 && g_sets[0].name=="H1 Fib" && g_sets[0].count==12 && !g_sets[0].fill && g_sets[0].levels[0].style==STYLE_SOLID);
+    Arm();BeginMouse(300,200);EndMouse(300,200);                              // a single click: a line
+    CHECK(g_count==2 && g_sets[1].hline && g_sets[1].name=="H1 Line" && g_sets[1].count==1 && g_sets[1].levels[0].ink==InpColorH1);
+    g_count=0;g_selected=-1;
+   }
+   // ---- drawings list: the type column and the Used switch
+   {
+    g_count=1;g_sets[0]=fv;g_sets[0].used=false;g_selected=-1;g_list=true;g_editor=false;g_ui_dirty=true;BuildUI();
+    CHECK(RegFind(UIS("L.Used0"))>=0 && g_texts[UIS("L.Type0")]=="FVG");
+    ListClick("L.Used0");CHECK(g_sets[0].used && !g_sets[0].ray_right);
+    ListClick("L.Used0");CHECK(!g_sets[0].used && g_sets[0].ray_right);
+    g_list=false;g_count=0;g_ui_dirty=true;
+   }
 
    std::printf(fails?"%d FAILED\n":"all tests passed\n",fails);
    return fails?1:0;

@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.64 | `Fibonacci_Pro_10.mq5` | **Current.** 1.63 with Fib and zone shading blended, so killzones stay visible over Fib ranges. |
+| 1.65 | `Fibonacci_Pro_11.mq5` | **Current.** 1.64 with drawings typed automatically (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR), coloured by timeframe. |
+| 1.64 | `Fibonacci_Pro_10.mq5` | Kept unchanged. Commit `bece2ee`. Fib and zone shading blended, so killzones stay visible over Fib ranges. |
 | 1.63 | `Fibonacci_Pro_9.mq5` | Kept unchanged. Commit `e083f0a`. Separate marker strips you can place, and tooltips on zone lines. |
 | 1.62 | `Fibonacci_Pro_8.mq5` | Kept unchanged. Commit `cae310b`. 1.61 plus sessions, killzones & macros. |
 | 1.61 | `Fibonacci_Pro_7.mq5` | Kept unchanged. Built on 1.60. |
@@ -18,6 +19,74 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - With more drawings than that, the older version falls back to its last backup.
 - Zone settings and zone presets saved by 1.63 or 1.64 can't be read by 1.62 (details under 1.63).
 - 1.63 reads zone settings saved by 1.64 and ignores the two settings 1.64 adds.
+- Drawings saved by 1.65 open in every earlier version (details under 1.65).
+
+## 1.65
+
+**Drawings are typed automatically.** When you release the mouse, the tool reads the candles under the two anchors and recognises what you drew:
+
+| You draw | Type |
+|---|---|
+| One click on a high, or on a low | KH (key high), KL (key low) |
+| One candle, from the high to the top of the body | PW (premium wick) |
+| One candle, from the low to the bottom of the body | DW (discount wick) |
+| One candle, high to low; a wick tip to the far side of the body; or open to close | OB (order block) |
+| Neighbouring candles, body edge to body edge, with the bodies apart | VI (volume imbalance) |
+| Candle 1 to candle 3 across a fair value gap | FVG |
+| The same, extended to take in one volume imbalance beside the middle candle | UFVG |
+| From the far edge of the volume imbalance below the middle candle to the far edge of the one above it | SPB (no FVG needed) |
+| A low and a high on different candles, the low below the high | KR (key range) |
+
+- **Style:** each drawing gets its type's style, its timeframe's colour and width, and a name such as "H4 FVG ▲" (▲ bullish, ▼ bearish).
+- **Your edits stay:** detection runs once, when the drawing is created, so renaming or restyling later is never overridden.
+- **Snapping:** anchors must snap to candle prices (`InpSnapOHLC`). A drawing that matches no type gets the KR style and is named "H4 Fib" (or "H4 Line" for a single click).
+
+**Colour shows the timeframe.** The eight colours were chosen by measurement for dark charts:
+- Every pair is clearly different, including for red-green colour-blind viewers.
+- None is close to green or red candles or to the default zone colours.
+- White is left free for OTE lines.
+
+| Timeframe | Colour | Width |
+|---|---|---|
+| MN | Pink #FF66B8 | 2 |
+| W1 | Yellow #FFFF19 | 2 |
+| D1 | Cyan #19FFFF | 2 |
+| H4 (also H6, H8, H12) | Orange #FF8800 | 1 |
+| H1 (also H2, H3) | Periwinkle #8C8CFF | 1 |
+| M15 (also M20, M30) | Sand #E6C37E | 1 |
+| M5 (also M6, M10, M12) | Sky blue #66CCFF | 1 |
+| M1 (also M2, M3, M4) | Grey #8C8C8C | 1 |
+
+The colours and the two widths are inputs (`InpColorMN` to `InpColorM1`, `InpWidthHigh`, `InpWidthLow`).
+
+**Levels.** Every drawing starts unfilled, with twelve levels: 0, 12.5, 25, 37.5, 50, 62, 62.5, 70.5, 75, 79, 87.5 and 100.
+- **Boundaries:** dashed for gaps (FVG, VI, UFVG, SPB, PW, DW), solid for OB and KR.
+- **Inner levels:** quadrants (25, 75) are dash-dot, octants (12.5, 37.5, 62.5, 87.5) dash-dot-dot, and the CE (50) dotted.
+- **OTE (62, 70.5, 79):** white, thin and solid, each labelled with its number.
+- **On by default:** boundaries, quadrants and the CE. Octants and OTE are in the list but off.
+- **Name tag:** the drawing's name sits above its upper boundary. In label text, `%n` now shows the drawing's name.
+
+**Fibo levels tab:**
+- A ≡ handle at the end of each row: drag it up or down to move that level.
+- Sort: the first click sorts low to high, the next high to low.
+- An "All" width button under the Width column, like the "All" colour button.
+- One-click switches for Quadrants, Octants and OTE.
+- Defaults restores the type's own level set.
+
+**Used.** A "Used (stop extending)" checkbox on the Common tab, and a Used column in the drawings list:
+- **Ticking it** stops the drawing at the first candle that traded into it and fades it. A key range stops at the latest candle.
+- **Unticking it** makes the drawing extend again.
+- **Adjusting:** you can still drag its end to a different candle.
+
+**Built-in presets.** FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR and "KR + OTE" are installed on first run:
+- They're ordinary presets, so you can edit, re-save or delete them. "Restore built-ins" in the Load dialog (click twice) writes them again.
+- A preset named after a type is the style new drawings of that type get. Style an FVG the way you like, then save it as "FVG".
+- A preset saved from a drawing in its timeframe colour stays coloured by timeframe when loaded onto other drawings.
+
+**Drawings list:** the Type column shows the detected type, and a Used column has the switch. The list is 28 px wider.
+
+**Compatibility.** The type, direction and used state are stored in spare bits of the drawings file:
+- Every earlier version still opens drawings saved by 1.65. Used drawings show stopped but not faded, and the name tag shows as `%n`.
 
 ## 1.64
 
