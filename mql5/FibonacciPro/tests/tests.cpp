@@ -1,4 +1,4 @@
-// Behavioural tests for Fibonacci_Pro_11.mq5 (1.65), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_12.mq5 (1.66), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
@@ -7,6 +7,7 @@
 #define TEST_OWN_OBJGET
 #define TEST_OWN_CANVAS
 #define TEST_OWN_XYTP
+#define TEST_OWN_MARKET
 #include "fp5.cpp"
 #include <cstdio>
 #include <cstring>
@@ -15,16 +16,9 @@
 #include <cstdlib>
 #include <array>
 #include "mql5_defaults.h"
+#include "test_common.h"
 // --- stubs the tests observe
 string _Symbol="EURUSD";int _Digits=5;double _Point=0.00001;int _Period=PERIOD_H1;
-static int g_sets_int=0,g_sets_str=0,g_creates=0,g_deletes=0;static std::map<string,bool> g_objs;static std::map<string,string> g_texts;
-bool ObjectCreate(long,const string& n,ENUM_OBJECT,int,datetime,double){g_creates++;g_objs[n]=true;return true;}
-bool ObjectDelete(long,const string& n){g_deletes++;g_objs.erase(n);return true;}
-int ObjectsDeleteAll(long,const string& p,int,int){int k=0;for(auto it=g_objs.begin();it!=g_objs.end();){if(it->first.rfind(p,0)==0){it=g_objs.erase(it);k++;}else ++it;}return k;}
-int ObjectFind(long,const string& n){return g_objs.count(n)?0:-1;}
-bool ObjectSetInteger(long,const string&,ENUM_OBJECT_PROPERTY_INTEGER,long){g_sets_int++;return true;}
-bool ObjectSetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING p,const string& v){g_sets_str++;if(p==OBJPROP_TEXT)g_texts[n]=v;return true;}
-string ObjectGetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING,int){auto it=g_texts.find(n);return it==g_texts.end()?"":it->second;}
 // Line-canvas fills are recorded on demand, so a test can see which lines were drawn.
 struct RecRect{int x0,y0,x1,y1;uint c;bool fill;};static std::vector<RecRect> g_rects;static bool g_rec=false;
 void CCanvas::FillRectangle(int x1,int y1,int x2,int y2,uint c)
@@ -46,50 +40,9 @@ static bool Near(uint a,uint b,int tol=2){for(int sh=0;sh<=24;sh+=8)if(std::abs(
 static long g_xy_t0=0;
 bool ChartTimePriceToXY(long,int,datetime t,double p,int& x,int& y){x=(int)((t-g_xy_t0)/60);y=(int)std::lround((1.2-p)*3000);return true;}
 bool ChartXYToTimePrice(long,int x,int y,int& s,datetime& t,double& p){s=0;t=(datetime)(g_xy_t0+60L*x);p=1.2-y/3000.0;return true;}
-static datetime g_test_now=0;
-datetime TimeTradeServer(){return g_test_now;}datetime TimeGMT(){return g_test_now-2*3600;}datetime TimeCurrent(){return g_test_now;}
 static std::vector<MqlRates> g_bars;
 int CopyRates(const string&,ENUM_TIMEFRAMES,datetime from,datetime to,MQLArr<MqlRates>& r)
   {r.v.clear();for(auto& b:g_bars)if(b.time>=from && b.time<=to)r.v.push_back(b);return (int)r.v.size();}
-static std::map<string,double> g_gv;static int g_sounds=0,g_pushes=0;
-bool PlaySound(const string&){g_sounds++;return true;}bool SendNotification(const string&){g_pushes++;return true;}
-bool GlobalVariableTemp(const string& n){if(g_gv.count(n))return false;g_gv[n]=0;return true;}
-bool GlobalVariableSetOnCondition(const string& n,double v,double c){auto it=g_gv.find(n);if(it==g_gv.end() || it->second!=c)return false;it->second=v;return true;}
-// In-memory files (1 byte per character).
-struct MemFile{string name,data;size_t pos=0;bool write=false;};
-static std::map<string,string> g_disk;static std::map<int,MemFile> g_open;static int g_next_handle=1;
-int FileOpen(const string& n,int flags,short,uint)
-  {MemFile f;f.name=n;f.write=(flags&FILE_WRITE)!=0;if(!f.write){auto it=g_disk.find(n);if(it==g_disk.end())return INVALID_HANDLE;f.data=it->second;}g_open[g_next_handle]=f;return g_next_handle++;}
-void FileClose(int h){auto it=g_open.find(h);if(it==g_open.end())return;if(it->second.write)g_disk[it->second.name]=it->second.data;g_open.erase(it);}
-void FileFlush(int){}
-template<class T> static uint MemWrite(int h,const T& v){g_open[h].data.append((const char*)&v,sizeof(T));return sizeof(T);}
-template<class T> static T MemRead(int h){MemFile& f=g_open[h];T v{};if(f.pos+sizeof(T)<=f.data.size())std::memcpy(&v,&f.data[f.pos],sizeof(T));f.pos+=sizeof(T);return v;}
-uint FileWriteInteger(int h,int v,int){return MemWrite(h,v);}uint FileWriteLong(int h,long v){return MemWrite(h,v);}uint FileWriteDouble(int h,double v){return MemWrite(h,v);}
-uint FileWriteString(int h,const string& s,int len){string t=len<0?s:s.substr(0,len);g_open[h].data+=t;return (uint)t.size();}
-int FileReadInteger(int h,int){return MemRead<int>(h);}long FileReadLong(int h){return MemRead<long>(h);}double FileReadDouble(int h){return MemRead<double>(h);}
-string FileReadString(int h,int len){MemFile& f=g_open[h];string s=f.data.substr(std::min(f.pos,f.data.size()),len);f.pos+=len;return s;}
-bool FileIsEnding(int h){return g_open[h].pos>=g_open[h].data.size();}
-ulong FileTell(int h){return g_open[h].pos;}ulong FileSize(int h){return g_open[h].data.size();}
-bool FileIsExist(const string& n,int){return g_disk.count(n)>0;}
-bool FileCopy(const string& a,int,const string& b,int){if(!g_disk.count(a))return false;g_disk[b]=g_disk[a];return true;}
-bool FileMove(const string& a,int,const string& b,int){if(!g_disk.count(a))return false;g_disk[b]=g_disk[a];g_disk.erase(a);return true;}
-bool FileDelete(const string& n,int){return g_disk.erase(n)>0;}
-long FileFindFirst(const string&,string&,int){return INVALID_HANDLE;}bool FileFindNext(long,string&){return false;}void FileFindClose(long){}
-double MathAbs(double v){return std::fabs(v);}double MathRound(double v){return std::round(v);}double MathFloor(double v){return std::floor(v);}
-double MathMod(double a,double b){return std::fmod(a,b);}bool MathIsValidNumber(double v){return std::isfinite(v);}
-double NormalizeDouble(double v,int d){double m=std::pow(10.0,d);return std::round(v*m)/m;}
-string IntegerToString(long v,int,ushort){return std::to_string(v);}
-string DoubleToString(double v,int d){char b[64];std::snprintf(b,sizeof b,"%.*f",d,v);return b;}
-int StringFind(const string& s,const string& m,int st){size_t r=s.find(m,st);return r==string::npos?-1:(int)r;}
-int StringLen(const string& s){return (int)s.size();}
-int StringReplace(string& s,const string& f,const string& r){int n=0;size_t p=0;while((p=s.find(f,p))!=string::npos){s.replace(p,f.size(),r);p+=r.size();n++;}return n;}
-bool StringToLower(string& s){std::transform(s.begin(),s.end(),s.begin(),::tolower);return true;}
-int StringTrimLeft(string& s){size_t p=s.find_first_not_of(' ');s=p==string::npos?"":s.substr(p);return 0;}
-int StringTrimRight(string& s){size_t p=s.find_last_not_of(' ');s=p==string::npos?"":s.substr(0,p+1);return 0;}
-int StringCompare(const string& a,const string& b,bool cs){string x=a,y=b;if(!cs){StringToLower(x);StringToLower(y);}return x<y?-1:(x>y?1:0);}
-
-static int fails=0;
-#define CHECK(c) do{if(!(c)){fails++;std::printf("FAIL line %d: %s\n",__LINE__,#c);}}while(0)
 static long NY(int y,int m,int d,int hh,int mm){return FPDaysFromCivil(y,m,d)*86400+hh*3600+mm*60;}
 static int FindZone(FPZoneConfig& c,const string& name){for(int i=0;i<c.count;i++)if(c.zones[i].name==name)return i;return -1;}
 static int MarkOfZone(int z){for(int k=0;k<g_zmark_n;k++)if(g_zocc[g_zvis[g_zmark[k].vis].occ].zone==z)return k;return -1;}
@@ -779,6 +732,317 @@ int main()
     ListClick("L.Used0");CHECK(g_sets[0].used && !g_sets[0].ray_right);
     ListClick("L.Used0");CHECK(!g_sets[0].used && g_sets[0].ray_right);
     g_list=false;g_count=0;g_ui_dirty=true;
+   }
+
+   // ======================================================== 1.66: lot size & risk
+   // ---- the calculation
+   {
+    CHECK(FPLotDigits(0.01)==2 && FPLotDigits(0.1)==1 && FPLotDigits(1)==0 && FPLotDigits(0.05)==2 && FPLotDigits(0.001)==3);
+    int f=9;
+    CHECK(std::fabs(FPRiskLots(100,20,1,0,0.01,100,0.01,f)-5.0)<1e-12 && f==0);        // US100: 20 points at 1 USD per point
+    CHECK(std::fabs(FPRiskLots(100,30,1,0,0.01,100,0.01,f)-3.33)<1e-12 && f==0);       // rounded down, never up
+    CHECK(std::fabs(FPRiskLots(100,20,1,5,0.01,100,0.01,f)-4.0)<1e-12 && f==0);        // commission adds to the loss
+    CHECK(FPRiskLots(0.1,20,1,0,0.01,100,0.01,f)==0 && f==1);                          // below the minimum volume
+    CHECK(FPRiskLots(1,20,1,0,0.1,100,0.01,f)==0 && f==1);                             // 0.05 lots with a 0.1 minimum
+    CHECK(std::fabs(FPRiskLots(3,20,1,0,0.1,100,0.01,f)-0.15)<1e-12 && f==0);          // above it, the 0.01 step applies
+    CHECK(std::fabs(FPRiskLots(1e6,1,1,0,0.01,100,0.01,f)-100)<1e-12 && f==2);         // capped at the maximum
+    CHECK(std::fabs(FPRiskLots(100,30,1,0,0.1,100,0.1,f)-3.3)<1e-12 && f==0);          // a 0.1 step
+    CHECK(std::fabs(FPRiskLots(70,7,1,0,0.01,100,0.01,f)-10.0)<1e-12);                 // an exact quotient is not a step short
+    CHECK(std::fabs(FPRiskLots(100,0.0020,100000,0,0.01,100,0.01,f)-0.5)<1e-12);       // EURUSD: 20 pips at 10 USD per pip
+    CHECK(FPRiskLots(100,0,1,0,0.01,100,0.01,f)==0 && f==-1);
+    CHECK(FPRiskLots(0,10,1,0,0.01,100,0.01,f)==0 && f==-1 && FPRiskLots(100,10,0,0,0.01,100,0.01,f)==0 && f==-1);
+    // Over random cases: the loss never exceeds the risk, and one more step would.
+    bool safe=true;unsigned seed=7;
+    for(int i=0;i<20000;i++)
+      {
+       seed=seed*1103515245+12345;double risk=1+(seed%100000)/10.0;
+       seed=seed*1103515245+12345;double dist=0.0001+(seed%50000)/1000.0;
+       seed=seed*1103515245+12345;double value=0.01+(seed%100000)/10.0;
+       seed=seed*1103515245+12345;double comm=(seed%20)/2.0;
+       double steps[]={0.01,0.1,1,0.05};double step=steps[(seed>>8)%4];
+       double lots=FPRiskLots(risk,dist,value,comm,0,0,step,f),per=dist*value+comm;
+       if(f==0 && lots*per>risk*(1+1e-6))safe=false;
+       if(f==0 && (lots+step)*per<=risk*(1-1e-6))safe=false;
+       if(f==1 && step*per<=risk*(1-1e-6))safe=false;
+      }
+    CHECK(safe);
+    CHECK(FPRiskAmount(0,150,1,0,10000,9000)==150 && FPRiskAmount(1,0,1.5,0,10000,9000)==150 && FPRiskAmount(2,0,1,0,10000,9000)==90 && FPRiskAmount(3,0,0.5,50000,10000,9000)==250);
+    CHECK(FPRiskSide(true,0,1.0990,1.1000,1.1001)==1 && FPRiskSide(true,0,1.1010,1.1000,1.1001)==-1 && FPRiskSide(true,0,1.10005,1.1000,1.1001)==0 && FPRiskSide(true,0,1.0,0,0)==0);
+    CHECK(FPRiskSide(false,1.1,1.09,0,0)==1 && FPRiskSide(false,1.1,1.11,0,0)==-1 && FPRiskSide(false,1.1,1.1,0,0)==0);
+    CHECK(FPRiskEntry(true,1,0,1.1000,1.1001)==1.1001 && FPRiskEntry(true,-1,0,1.1000,1.1001)==1.1000 && FPRiskEntry(false,1,1.05,1.1,1.1001)==1.05);
+    CHECK(std::fabs(FPTargetPrice(100,90,2)-120)<1e-12 && std::fabs(FPTargetPrice(100,110,2)-80)<1e-12);
+    CHECK(std::fabs(FPTargetR(100,90,125)-2.5)<1e-12 && std::fabs(FPTargetR(100,110,85)-1.5)<1e-12 && FPTargetR(100,100,120)==0);
+    CHECK(FPNormTick(18000.13,0.25,2)==18000.25 && FPNormTick(18000.12,0.25,2)==18000.0 && FPNormTick(1.234567,0.00001,5)==1.23457);
+    MQLArr<double> r;
+    CHECK(FPParseRList("2",r,8)==1 && r[0]==2);
+    CHECK(FPParseRList("3 1 2",r,8)==3 && r[0]==1 && r[1]==2 && r[2]==3);
+    CHECK(FPParseRList(" 1.5, 3;5 ",r,8)==3 && r[0]==1.5 && r[2]==5 && FPRListText(r,3)=="1.5 3 5");
+    CHECK(FPParseRList("2 2",r,8)==1 && FPParseRList("",r,8)==0 && FPParseRList("abc",r,8)==-1 && FPParseRList("-1",r,8)==-1);
+    CHECK(FPParseRList("0",r,8)==-1 && FPParseRList("101",r,8)==-1 && FPParseRList("1 2 3 4 5 6 7 8 9 10",r,8)==8 && r[7]==8);
+    CHECK(FPMoney(12345.678)=="12,345.68" && FPMoney(-1234.5)=="-1,234.50" && FPMoney(999)=="999.00" && FPMoney(1000)=="1,000.00");
+    CHECK(FPMoney(0)=="0.00" && FPMoney(1234567)=="1,234,567.00" && FPMoney(-0.001)=="0.00");
+    CHECK(FPRNum(2)=="2" && FPRNum(1.5)=="1.5" && FPRNum(10)=="10" && RiskNumText(0.0125)=="0.0125" && RiskNumText(100)=="100");
+    double v=0;bool dis=false;
+    CHECK(FPValueDecide(5,2,1,10,v,dis)==1 && v==5 && dis);               // your own value first
+    CHECK(FPValueDecide(0,2,1,10,v,dis)==2 && v==2 && dis);               // then the calibration
+    CHECK(FPValueDecide(0,0,1,10,v,dis)==0 && v==0 && dis);               // methods that disagree: no size
+    CHECK(FPValueDecide(0,0,1,1.01,v,dis)==3 && v==1.01 && !dis);         // agreeing methods: the larger
+    CHECK(FPValueDecide(0,0,1,1.03,v,dis)==0 && dis);                     // 3% apart is a disagreement
+    CHECK(FPValueDecide(0,0,1,0,v,dis)==4 && v==1 && FPValueDecide(0,0,0,3,v,dis)==5 && v==3 && FPValueDecide(0,0,0,0,v,dis)==0);
+    CHECK(FPPendingName(1,1.09,1.1,1.1001)=="BUY LIMIT" && FPPendingName(1,1.11,1.1,1.1001)=="BUY STOP");
+    CHECK(FPPendingName(-1,1.11,1.1,1.1001)=="SELL LIMIT" && FPPendingName(-1,1.09,1.1,1.1001)=="SELL STOP");
+    CHECK(FPIsFiat("USD") && FPIsFiat("JPY") && !FPIsFiat("XAU") && !FPIsFiat("US"));
+    // a fourth shortcut
+    int key=0;bool c=false,s2=false,a=false;
+    CHECK(ParseHotkey(InpRiskHotkey,key,c,s2,a) && key=='R' && c && s2 && !a);
+    g_risk_key='R';g_risk_ctrl=true;g_risk_shift=true;g_risk_alt=false;CHECK(!ShortcutsClash());
+    g_risk_key='K';CHECK(ShortcutsClash());g_risk_key='R';
+   }
+   // ---- risk settings: one file per account, verified on save, damaged files refused
+   {
+    FPRiskConfig c;FPRDefaults(c);
+    CHECK(c.mode==1 && c.percent==1 && c.entry==0 && c.targets=="2" && c.add_r=="3" && c.count==0);
+    c.mode=3;c.percent=0.5;c.base=50000;c.entry=1;c.targets="1 2 3";
+    CHECK(FPRSymSet(c,"US100",0,1.0) && FPRSymSet(c,"EURUSD",7,0) && c.count==2);
+    CHECK(FPRCommission(c,"EURUSD")==7 && FPRManual(c,"US100")==1.0 && FPRManual(c,"XAU")==0 && FPRCommission(c,"XAU")==0);
+    CHECK(FPRWriteFile("rt.risk",c));
+    FPRiskConfig d;FPRDefaults(d);
+    CHECK(FPRReadFile("rt.risk",d) && d.mode==3 && d.base==50000 && d.entry==1 && d.targets=="1 2 3" && d.count==2 && d.syms[1].symbol=="EURUSD" && d.syms[1].commission==7);
+    CHECK(FPRSymSet(c,"US100",0,0) && c.count==1 && c.syms[0].symbol=="EURUSD");      // nothing of its own left: removed
+    string keep=g_disk["rt.risk"];g_disk["rt.risk"]=keep.substr(0,keep.size()-3);
+    FPRiskConfig e;FPRDefaults(e);CHECK(!FPRReadFile("rt.risk",e) && e.mode==1);
+    g_disk["rt.risk"]=keep;
+    FPRiskConfig full;FPRDefaults(full);bool ok=true;
+    for(int i=0;i<FPR_MAX_SYMS;i++)ok=ok && FPRSymSet(full,"S"+std::to_string(i),1,0);
+    CHECK(ok && !FPRSymSet(full,"NEW",1,0) && FPRSymSet(full,"S5",2,0) && FPRCommission(full,"S5")==2);
+   }
+   // ---- calibration file (same code as the script): verified, damaged files refused
+   {
+    MQLArr<FPCalib> list;ArrayResize(list,2);
+    list[0].symbol="US100";list[0].profit_ccy="USD";list[0].account_ccy="USD";list[0].value_profit=1;list[0].value_account=1;
+    list[0].contract=1;list[0].tick_size=0.01;list[0].tick_value=0.1;list[0].time=1000;
+    list[1]=list[0];list[1].symbol="DE40";list[1].profit_ccy="EUR";list[1].value_account=1.08;
+    CHECK(FPCSave("c.calib",list,2));
+    MQLArr<FPCalib> back;CHECK(FPCLoad("c.calib",back)==2 && back[1].symbol=="DE40" && back[1].value_account==1.08 && back[0].time==1000);
+    CHECK(FPCFind(back,2,"DE40")==1 && FPCFind(back,2,"XX")==-1);
+    string keep=g_disk["c.calib"];g_disk["c.calib"]=keep+"x";CHECK(FPCLoad("c.calib",back)==-1 && ArraySize(back)==0);
+    g_disk["c.calib"]=keep;CHECK(FPCLoad("missing.calib",back)==-1);
+   }
+   // ---- the value of a lot: contract size checked against the tick value; calibration; your own value
+   {
+    ClearMarket();g_acc_ccy="USD";g_server="Test-Server";g_login=1234;
+    AddSym("EURUSD","EUR","USD",SYMBOL_CALC_MODE_FOREX,1.1,1.1001,5,0.00001,1.0,100000,true);
+    AddSym("US100","USD","USD",SYMBOL_CALC_MODE_CFDINDEX,18000,18001,2,0.01,0.1,1,true);       // the broker's tick value is 10x too high
+    AddSym("DE40","EUR","EUR",SYMBOL_CALC_MODE_CFDINDEX,19000,19002,1,0.1,0.11,1,true);          // 0.1 x 1 x 1.10 = 0.11 USD
+    AddSym("USDJPY","USD","JPY",SYMBOL_CALC_MODE_FOREX,150,150.01,3,0.001,0.6666,100000,true);
+    AddSym("GBPUSD","GBP","USD",SYMBOL_CALC_MODE_FOREX,1.25,1.2501,5,0.00001,1.0,100000,false); // not in Market Watch
+    string sym0=_Symbol;int dig0=_Digits;double pt0=_Point;
+    FPRDefaults(g_rcfg);g_reditor=false;g_disk.erase(FPCFile());
+    _Symbol="EURUSD";g_rconv_key="";RiskLoadCalibration(true);RiskRefreshValue();
+    CHECK(std::fabs(g_rval.contract-100000)<1e-6 && std::fabs(g_rval.tick-100000)<1e-6 && !g_rcal_found);
+    double v=0;bool dis=false;
+    CHECK(FPValueDecide(0,g_rval.calib,g_rval.contract,g_rval.tick,v,dis)==3 && !dis);
+    CHECK(g_rsym.fx && std::fabs(RiskPip()-0.0001)<1e-15 && RiskUnitText()=="per pip (0.00010)" && RiskMoveText(-0.0021)=="-21.0 pips");
+    _Symbol="US100";_Digits=2;_Point=0.01;g_rconv_key="";RiskRefreshValue();
+    CHECK(std::fabs(g_rval.contract-1)<1e-9 && std::fabs(g_rval.tick-10)<1e-9);
+    CHECK(FPValueDecide(0,g_rval.calib,g_rval.contract,g_rval.tick,v,dis)==0 && dis);                  // blocked
+    CHECK(!g_rsym.fx && RiskUnitText()=="per 1.0 move" && RiskMoveText(25.5)=="+25.50");
+    // On the chart: no size, and the reason.
+    RiskReset();g_risk.active=true;g_risk.market=true;g_risk.stop=17980;g_risk.ntp=1;g_risk.tp_r[0]=2;g_risk.tp_fixed[0]=true;
+    RiskComputeWith(g_rcfg);
+    CHECK(g_rview.side==1 && g_rview.lots==0 && g_rview.flag==-1 && g_rview.why.find("disagree")!=string::npos && RiskEntryText().find("no size")!=string::npos);
+    // Your own value sizes it: 21 points at 1 USD, 1% of 10,000 -> 4.76 lots.
+    FPRSymSet(g_rcfg,"US100",0,1.0);RiskComputeWith(g_rcfg);
+    CHECK(g_rval.source==1 && std::fabs(g_rview.lots-4.76)<1e-12 && std::fabs(g_rview.tp[0]-18043)<1e-9);
+    FPRSymSet(g_rcfg,"US100",0,0);
+    _Symbol="DE40";_Digits=1;_Point=0.1;g_rconv_key="";RiskRefreshValue();
+    CHECK(std::fabs(g_rval.contract-1.1)<1e-9 && std::fabs(g_rval.tick-1.1)<1e-9 && !g_rsym.fx);      // EUR profit at the EURUSD bid
+    AddSym("EURUSD.c","EUR","USD",SYMBOL_CALC_MODE_CFD,1.1,1.1001,5,0.00001,1.0,100000,true);   // forex set up as a CFD
+    _Symbol="EURUSD.c";_Digits=5;_Point=0.00001;RiskRefreshValue();CHECK(g_rsym.fx && std::fabs(g_rval.contract-100000)<1e-6);
+    _Symbol="USDJPY";_Digits=3;_Point=0.001;g_rconv_key="";RiskRefreshValue();
+    CHECK(std::fabs(g_rval.contract-100000/150.01)<1e-6 && RiskUnitText()=="per pip (0.010)");         // JPY to USD: 1 / the USDJPY ask
+    // A GBP account: USD profit converted with GBPUSD, found outside Market Watch and added to it.
+    g_acc_ccy="GBP";_Symbol="US100";_Digits=2;_Point=0.01;g_rconv_key="";g_selects=0;RiskRefreshValue();
+    CHECK(std::fabs(g_rval.contract-1/1.2501)<1e-9 && g_selects==1 && g_syms["GBPUSD"].watch);
+    g_acc_ccy="USD";
+    // The calibration: per server, kept in the profit currency, converted at today's rate.
+    MQLArr<FPCalib> list;ArrayResize(list,2);
+    list[0].symbol="US100";list[0].profit_ccy="USD";list[0].account_ccy="USD";list[0].value_profit=1;list[0].value_account=1;
+    list[0].contract=1;list[0].tick_size=0.01;list[0].tick_value=0.1;list[0].time=1000;
+    list[1]=list[0];list[1].symbol="DE40";list[1].profit_ccy="EUR";list[1].value_profit=1;list[1].value_account=1.05;
+    CHECK(FPCFile()=="FibonacciPro\\Test-Server.calib" && FPCSave(FPCFile(),list,2));
+    g_rconv_key="";RiskLoadCalibration(true);RiskRefreshValue();
+    CHECK(g_rcal_found && std::fabs(g_rval.calib-1)<1e-12);
+    CHECK(FPValueDecide(0,g_rval.calib,g_rval.contract,g_rval.tick,v,dis)==2 && v==1);                 // sizes despite the bad tick value
+    RiskComputeWith(g_rcfg);CHECK(g_rval.source==2 && std::fabs(g_rview.lots-4.76)<1e-12);
+    _Symbol="DE40";_Digits=1;_Point=0.1;g_rconv_key="";RiskLoadCalibration(true);RiskRefreshValue();
+    CHECK(std::fabs(g_rval.calib-1.1)<1e-9);                                                           // 1 EUR at today's 1.10, not 1.05 then
+    g_syms["DE40"].contract=10;RiskRefreshValue();
+    CHECK(g_rval.calib==0 && g_rval.calib_stale);                                                      // contract changed: run the script again
+    g_syms["DE40"].contract=1;
+    // Without a rate to convert, the account-currency value of the calibration is used.
+    for(string gone:{"EURUSD","EURUSD.c"}){g_syms.erase(gone);g_watch.erase(std::find(g_watch.begin(),g_watch.end(),gone));g_all.erase(std::find(g_all.begin(),g_all.end(),gone));}
+    g_rconv_key="";
+    RiskRefreshValue();CHECK(std::fabs(g_rval.calib-1.05)<1e-9 && g_rval.contract==0);
+    g_disk.erase(FPCFile());RiskReset();
+    _Symbol=sym0;_Digits=dig0;_Point=pt0;
+   }
+   // ---- the measurement: press at the market, drag to the stop, release
+   {
+    ClearMarket();g_acc_ccy="USD";g_server="Test-Server";g_login=1234;g_balance=10000;g_equity=10000;
+    AddSym("EURUSD","EUR","USD",SYMBOL_CALC_MODE_FOREX,1.10000,1.10010,5,0.00001,1.0,100000,true);
+    g_disk.erase(FPCFile());
+    g_zact.enabled=false;g_zcfg.enabled=false;
+    g_count=0;g_selected=-1;g_editor=false;g_list=false;g_zeditor=false;g_reditor=false;g_popup=0;g_owner=true;g_hidden=false;g_armed=false;g_drag=0;
+    g_rstore="mem.risk";g_disk.erase("mem.risk");LoadRisk();CHECK(!g_rstore_found && g_rcfg.mode==1 && !g_risk.armed);
+    // The first use opens the Risk window, so the risk per trade is checked first.
+    RiskArm();CHECK(g_risk.armed && g_reditor);
+    RiskPanelClick("Cancel");RiskClear();RiskArm();CHECK(g_risk.armed && !g_reditor);       // only once per session
+    OpenRisk();g_redit.mode=0;g_redit.amount=100;CHECK(ApplyRisk(true) && !g_reditor && g_rstore_found && g_rcfg.mode==0 && FileIsExist("mem.risk",0));
+    g_ui_dirty=true;BuildUI();
+    CHECK(RegFind(UIS("K.Market"))>=0 && RegFind(UIS("K.Add"))>=0 && RegFind(UIS("K.R"))>=0 && RegFind(UIS("T.Risk"))>=0);
+    CHECK(g_texts[UIS("K.Risk")]=="Risk 100.00 USD" && HitUI(g_toolbar_x+U(20),RiskBarY()+U(5)));
+    Status("hello");UpdateStatusObjects(GetTickCount64());
+    {int si=RegFind(UIS("T.StatusBG"));CHECK(si>=0 && g_reg[si].y==RiskBarY()+U(26));}    // the status line moves below the bar
+    // The crosshair: the pointer is the stop, the size is shown before pressing.
+    g_mouse_in=true;g_mouse_x=600;g_mouse_y=306;RiskPrepare();
+    CHECK(!g_risk.active && g_rview.side==1 && std::fabs(g_rview.lots-0.47)<1e-12);
+    g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;
+    CHECK(RowPieces(306,0,999)>20);                                                         // the dotted crosshair line
+    // Press near the market, drag to 1.09800 (y 306), release.
+    int x0=300,yst=306;
+    BeginMouse(x0,300);CHECK(g_risk.active && g_rdrag==1);
+    MoveMouse(x0+40,yst);EndMouse(x0+40,yst);
+    CHECK(!g_risk.armed && g_risk.active && g_rdrag==0 && std::fabs(g_risk.stop-1.098)<1e-9);
+    RiskPrepare();
+    CHECK(g_rview.side==1 && g_rview.entry==1.1001 && std::fabs(g_rview.dist-0.0021)<1e-9);
+    CHECK(std::fabs(g_rview.lots-0.47)<1e-12 && g_rview.flag==0 && std::fabs(g_rview.actual-98.7)<1e-6);  // 100 / 210 per lot, rounded down
+    CHECK(g_rview.ntp==1 && std::fabs(g_rview.tp[0]-1.1043)<1e-9);                        // 2R
+    CHECK(RiskEntryText()=="BUY 0.47 lots at market 1.10010");
+    CHECK(RiskStopText()=="SL 1.09800  -21.0 pips  -98.70 USD (0.99%)");
+    CHECK(RiskTargetText(1,0)=="TP1  2R  1.10430  +42.0 pips  +197.40 USD");
+    // Drawn: stop and target lines; red and green areas behind the candles, from the press to the right.
+    g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;
+    auto line_at=[&](int y,color col){for(auto& q:g_rects)if(!q.fill && q.y0<=y && y<=q.y1 && q.x1-q.x0>100 && (q.c&0xFFFFFF)==(uint)(col&0xFFFFFF))return true;return false;};
+    CHECK(line_at(306,FPR_LOSS) && line_at(287,FPR_PROFIT));
+    uint red=FillAt(x0+100,303),green=FillAt(x0+100,293);
+    CHECK((red>>24)==41 && Near(red,RefARGB(FPR_LOSS,41)) && (green>>24)==33 && Near(green,RefARGB(FPR_PROFIT,33)));
+    CHECK(FillAt(x0-20,303)==0);
+    RiskGeometry();CHECK(RiskHit(x0+200,g_rgye)==0);                                       // a market entry is not draggable
+    // The market moves: the entry follows the ask and the size follows the distance.
+    g_syms["EURUSD"].bid=1.1001;g_syms["EURUSD"].ask=1.1002;g_dirty=false;g_rtick=GetTickCount64();
+    RiskTick(GetTickCount64());CHECK(g_dirty);
+    RiskPrepare();CHECK(g_rview.entry==1.1002 && std::fabs(g_rview.lots-0.45)<1e-12);      // 100 / 220
+    // Drag the stop to 1.09900 (y 303): 100 / 120 -> 0.83 lots.
+    BeginMouse(x0+200,306);CHECK(g_rdrag==1);MoveMouse(x0+200,303);EndMouse(x0+200,303);
+    CHECK(std::fabs(g_risk.stop-1.099)<1e-9);RiskPrepare();CHECK(std::fabs(g_rview.lots-0.83)<1e-12);
+    BeginMouse(x0+200,305);EndMouse(x0+200,305);CHECK(std::fabs(g_risk.stop-1.099)<1e-9);   // a plain click moves nothing
+    // +TP adds the R multiples typed on the bar; repeats are refused; a bad list adds nothing.
+    g_ui_dirty=true;BuildUI();
+    ObjectSetString(0,UIS("K.R"),OBJPROP_TEXT,"3 4");Click(UIS("K.Add"));
+    CHECK(g_risk.ntp==3 && g_risk.tp_r[1]==3 && g_risk.tp_r[2]==4 && g_rcfg.add_r=="3 4");
+    Click(UIS("K.Add"));CHECK(g_risk.ntp==3);
+    ObjectSetString(0,UIS("K.R"),OBJPROP_TEXT,"x");Click(UIS("K.Add"));CHECK(g_risk.ntp==3 && g_rcfg.add_r=="3 4");
+    {FPRiskConfig saved;FPRDefaults(saved);CHECK(FPRReadFile("mem.risk",saved) && saved.add_r=="3 4");}
+    // The green area reaches the farthest target; targets are numbered from the nearest.
+    g_rects.clear();g_rec=true;g_dirty=true;Render();g_rec=false;
+    CHECK(Near(FillAt(x0+100,287),RefARGB(FPR_PROFIT,33)));
+    {string t1="",t3="";for(int i=0;i<g_rtag_n;i++){if(g_rtags[i].text.rfind("TP1 ",0)==0)t1=g_rtags[i].text;if(g_rtags[i].text.rfind("TP3 ",0)==0)t3=g_rtags[i].text;}
+     CHECK(t1.find("  2R  ")!=string::npos && t3.find("  4R  ")!=string::npos);}
+    // -TP removes the farthest target.
+    RiskPrepare();Click(UIS("K.Del"));CHECK(g_risk.ntp==2 && g_risk.tp_r[1]==3);
+    // A dragged target holds its price; the others still follow the stop.
+    RiskPrepare();RiskGeometry();int ty=g_rgty[1];
+    BeginMouse(x0+200,ty);CHECK(g_rdrag==11);MoveMouse(x0+200,ty-30);EndMouse(x0+200,ty-30);
+    CHECK(!g_risk.tp_fixed[1] && std::fabs(g_risk.tp[1]-(1.2-(ty-30)/3000.0))<1e-5);
+    double held=g_risk.tp[1],two=g_rview.tp[0];
+    BeginMouse(x0+200,303);MoveMouse(x0+200,309);EndMouse(x0+200,309);RiskPrepare();
+    CHECK(g_rview.tp[1]==held && g_rview.tp[0]!=two && std::fabs(g_rview.tp[0]-(g_rview.entry+2*g_rview.dist))<1e-9);
+    // Esc while dragging puts the line back.
+    double stop_before=g_risk.stop;BeginMouse(x0+200,309);MoveMouse(x0+200,330);
+    {long lp=27;double dp=0;string sp="";OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);}
+    CHECK(g_rdrag==0 && g_risk.stop==stop_before && g_risk.active);
+    // Double-click a target line to remove it.
+    RiskPrepare();RiskGeometry();ty=g_rgty[0];g_rlast_down=0;
+    BeginMouse(x0+200,ty);EndMouse(x0+200,ty);g_fake_ticks+=100;BeginMouse(x0+200,ty);EndMouse(x0+200,ty);
+    CHECK(g_risk.ntp==1 && !g_risk.tp_fixed[0]);
+    // With New Fib armed, a press on a risk line starts the Fib instead.
+    Arm();CHECK(g_armed && g_risk.active);
+    RiskGeometry();{double keep_stop=g_risk.stop;BeginMouse(x0+200,g_rgys);CHECK(g_drag==1 && g_rdrag==0 && g_risk.stop==keep_stop);}
+    CancelDrag();CHECK(!g_armed && g_count==0 && g_risk.active);
+    // A press away from the box lines is not the risk tool's.
+    CHECK(!RiskPress(x0+200,100) && !RiskPress(x0-50,309));
+    // To a price of your own: the entry stays where the market is.
+    RiskPrepare();double at=g_rview.entry;RiskSetMarket(false);CHECK(!g_risk.market && g_risk.entry==at && at==1.1002);
+    RiskSetMarket(true);
+    // Esc removes the measurement.
+    {long lp=27;double dp=0;string sp="";OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);}
+    CHECK(!g_risk.active && !g_risk.armed);
+    // A price of your own: press at the entry, drag to the stop.
+    RiskArm();g_ui_dirty=true;BuildUI();Click(UIS("K.Limit"));CHECK(!g_risk.market && g_rcfg.entry==1 && g_risk.armed);
+    {FPRiskConfig saved;FPRDefaults(saved);CHECK(FPRReadFile("mem.risk",saved) && saved.entry==1);}   // remembered for next time
+    int ye=315,ysl=321;   // 1.09500 and 1.09300
+    BeginMouse(x0,ye);MoveMouse(x0,ysl);EndMouse(x0,ysl);
+    CHECK(!g_risk.armed && g_risk.active && g_risk.entry==1.095 && std::fabs(g_risk.stop-1.093)<1e-9);
+    RiskPrepare();CHECK(g_rview.side==1 && std::fabs(g_rview.lots-0.5)<1e-12 && RiskEntryText()=="BUY LIMIT 0.50 lots @ 1.09500");
+    RiskGeometry();BeginMouse(x0+200,g_rgye);CHECK(g_rdrag==2);
+    MoveMouse(x0+200,g_rgye-6);EndMouse(x0+200,g_rgye-6);CHECK(std::fabs(g_risk.entry-1.097)<1e-9);
+    // ...or click the entry, then click the stop (it follows the pointer in between).
+    RiskArm();CHECK(!g_risk.market && !g_risk.active);
+    g_prev_down=false;BeginMouse(x0,ye);EndMouse(x0,ye);CHECK(g_risk.armed && g_risk.active && g_risk.stage==1 && g_status.find("Now click your stop")!=string::npos);
+    HandlePointer(x0+50,ysl+3,false);CHECK(std::fabs(g_risk.stop-(1.2-(ysl+3)/3000.0))<1e-5);
+    BeginMouse(x0+50,ysl);EndMouse(x0+50,ysl);CHECK(!g_risk.armed && std::fabs(g_risk.stop-1.093)<1e-9);
+    // A sell above the market is a SELL LIMIT; at market the stop must be outside the spread.
+    RiskArm();BeginMouse(x0,282);MoveMouse(x0,276);EndMouse(x0,276);RiskPrepare();          // 1.10600 -> 1.10800
+    CHECK(g_rview.side==-1 && RiskEntryText().rfind("SELL LIMIT",0)==0);
+    RiskSetMarket(true);RiskPrepare();CHECK(g_risk.market && g_rview.side==-1 && g_rview.entry==1.1001);
+    // A risk too small for the minimum volume: no size, and what the minimum would lose.
+    g_syms["EURUSD"].vmin=1.0;RiskRefreshValue();RiskPrepare();
+    CHECK(g_rview.flag==1 && g_rview.lots==0 && RiskEntryText()=="SELL at market 1.10010: below 1.00 lot (1.00 loses 790.00 USD)");   // 79 pips
+    g_syms["EURUSD"].vmin=0.01;RiskRefreshValue();
+    g_syms["EURUSD"].bid=1.1000;g_syms["EURUSD"].ask=1.1010;
+    RiskArm();BeginMouse(x0,299);EndMouse(x0,299);CHECK(g_risk.armed && !g_risk.active);  // inside the spread: try again
+    // The toolbar button toggles a measurement being made; so does the shortcut.
+    g_ui_dirty=true;BuildUI();Click(UIS("T.Risk"));CHECK(!g_risk.armed);Click(UIS("T.Risk"));CHECK(g_risk.armed);
+    g_risk_ctrl=false;g_risk_shift=false;g_risk_key_held=false;
+    {long lp='R';double dp=0;string sp="";OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);CHECK(!g_risk.armed);OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);CHECK(!g_risk.armed);
+     OnChartEvent(CHARTEVENT_KEYUP,lp,dp,sp);OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);CHECK(g_risk.armed);OnChartEvent(CHARTEVENT_KEYUP,lp,dp,sp);}
+    g_risk_ctrl=true;g_risk_shift=true;
+    // New Fib drops a measurement being made.
+    Arm();CHECK(g_armed && !g_risk.armed);CancelDrag();
+    // ---- the Risk window: modes, commission, targets, your own value (per pip on forex)
+    RiskArm();OpenRisk();CHECK(g_reditor);g_ui_dirty=true;BuildUI();
+    CHECK(RegFind(UIS("W.Mode0"))>=0 && RegFind(UIS("W.Amount"))>=0 && RegFind(UIS("W.Value"))>=0 && RegFind(UIS("W.OK"))>=0 && RegFind(UIS("K.Risk"))>=0);
+    CHECK(HitUI(g_panel_x+U(20),g_panel_y+U(300)) && g_texts[UIS("W.Used")].find("contract size and tick value agree")!=string::npos);
+    RiskPanelClick("Mode1");CHECK(g_redit.mode==1);g_ui_dirty=true;BuildUI();
+    ObjectSetString(0,UIS("W.Percent"),OBJPROP_TEXT,"0.5");ObjectSetString(0,UIS("W.Comm"),OBJPROP_TEXT,"7");
+    ObjectSetString(0,UIS("W.Targets"),OBJPROP_TEXT,"3 1");ObjectSetString(0,UIS("W.Value"),OBJPROP_TEXT,"10");   // 10 USD per pip
+    CHECK(HarvestRiskEdits() && g_redit.percent==0.5 && FPRCommission(g_redit,"EURUSD")==7 && g_redit.targets=="1 3");
+    CHECK(std::fabs(FPRManual(g_redit,"EURUSD")-100000)<1e-6);
+    ObjectSetString(0,UIS("W.Percent"),OBJPROP_TEXT,"150");CHECK(!HarvestRiskEdits() && g_redit.percent==0.5);
+    g_ui_dirty=true;BuildUI();CHECK(g_texts[UIS("W.Percent")]=="0.5" && g_texts[UIS("W.Used")].find("your own value")!=string::npos);
+    // The chart previews the window: 0.5% of 10,000 = 50, 20 pips + 7 commission = 207 per lot -> 0.24.
+    BeginMouse(700,300);MoveMouse(700,303);EndMouse(700,303);RiskPrepare();
+    CHECK(!g_risk.armed && std::fabs(g_rview.dist-0.002)<1e-9 && std::fabs(g_rview.lots-0.24)<1e-12 && std::fabs(g_rview.actual-49.68)<1e-6);
+    CHECK(g_rview.ntp==2 && std::fabs(g_rview.tp_r[0]-1)<1e-12);                          // the window's targets: 1R and 3R
+    CHECK(RiskStopText()=="SL 1.09900  -20.0 pips  -49.68 USD (0.50%)" && RiskTargetText(1,0)=="TP1  1R  1.10300  +20.0 pips  +46.32 USD");
+    RiskPanelClick("UseTick");CHECK(std::fabs(FPRManual(g_redit,"EURUSD")-100000)<1e-6);
+    RiskPanelClick("ClearValue");CHECK(FPRManual(g_redit,"EURUSD")==0 && FPRCommission(g_redit,"EURUSD")==7);
+    RiskPanelClick("Cancel");CHECK(!g_reditor && g_rcfg.mode==0);
+    RiskPrepare();CHECK(std::fabs(g_rview.lots-0.5)<1e-12);                               // back to 100 USD, no commission
+    // OK keeps it, for every chart of this account.
+    OpenRisk();RiskPanelClick("Mode1");g_ui_dirty=true;BuildUI();
+    ObjectSetString(0,UIS("W.Percent"),OBJPROP_TEXT,"0.5");ObjectSetString(0,UIS("W.Comm"),OBJPROP_TEXT,"7");
+    RiskPanelClick("OK");CHECK(!g_reditor && g_rcfg.mode==1 && g_rcfg.percent==0.5 && FPRCommission(g_rcfg,"EURUSD")==7);
+    {FPRiskConfig back;FPRDefaults(back);CHECK(FPRReadFile("mem.risk",back) && back.mode==1 && back.percent==0.5 && FPRCommission(back,"EURUSD")==7);}
+    // One window at a time; Esc closes the innermost thing first.
+    g_count=1;MakeFib(g_sets[0],90,"Fib",false,PERIOD_H1);g_selected=0;
+    OpenRisk();OpenEditor();CHECK(!g_editor && g_reditor);OpenZones();CHECK(!g_zeditor);CloseRisk();
+    RiskArm();OpenZones();CHECK(g_zeditor && g_risk.armed);
+    {long lp=27;double dp=0;string sp="";OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);CHECK(!g_risk.armed && g_zeditor);
+     OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);CHECK(!g_zeditor);}
+    g_count=0;g_selected=-1;RiskClear();g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("K.Market"))<0);   // the bar goes with the measurement
+    g_zact.enabled=true;g_zcfg.enabled=true;
    }
 
    std::printf(fails?"%d FAILED\n":"all tests passed\n",fails);

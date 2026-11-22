@@ -1,8 +1,15 @@
 // Inert default implementations of the MT5 API for the behavioural tests. Tests define
 // the object/string/math functions they observe; everything else does nothing here.
 #pragma once
+#ifndef TEST_OWN_MARKET
 long AccountInfoInteger(ENUM_ACCOUNT_INFO_INTEGER){return 0;}
 string AccountInfoString(ENUM_ACCOUNT_INFO_STRING){return "";}
+double AccountInfoDouble(ENUM_ACCOUNT_INFO_DOUBLE){return 0;}
+double SymbolInfoDouble(const string&,ENUM_SYMBOL_INFO_DOUBLE){return 0;}
+long SymbolInfoInteger(const string&,ENUM_SYMBOL_INFO_INTEGER){return 0;}
+string SymbolInfoString(const string&,ENUM_SYMBOL_INFO_STRING){return "";}
+int SymbolsTotal(bool){return 0;}string SymbolName(int,bool){return "";}bool SymbolSelect(const string&,bool){return true;}
+#endif
 bool CCanvas::CreateBitmapLabel(long,int,const string&,int,int,int w,int h,ENUM_COLOR_FORMAT){m_w=w;m_h=h;return true;}
 void CCanvas::Destroy(){m_w=0;m_h=0;}int CCanvas::Width(){return m_w;}int CCanvas::Height(){return m_h;}void CCanvas::Erase(uint){}void CCanvas::Update(bool){}
 void CCanvas::PixelSet(int,int,uint){}void CCanvas::Rectangle(int,int,int,int,uint){}

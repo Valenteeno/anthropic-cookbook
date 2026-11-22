@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.65 | `Fibonacci_Pro_11.mq5` | **Current.** 1.64 with drawings typed automatically (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR), coloured by timeframe. |
+| 1.66 | `Fibonacci_Pro_12.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.65 with a lot size & risk crosshair, and a calibration script for it. |
+| 1.65 | `Fibonacci_Pro_11.mq5` | Kept unchanged. Commit `b9395f4`. Drawings typed automatically (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR), coloured by timeframe. |
 | 1.64 | `Fibonacci_Pro_10.mq5` | Kept unchanged. Commit `bece2ee`. Fib and zone shading blended, so killzones stay visible over Fib ranges. |
 | 1.63 | `Fibonacci_Pro_9.mq5` | Kept unchanged. Commit `e083f0a`. Separate marker strips you can place, and tooltips on zone lines. |
 | 1.62 | `Fibonacci_Pro_8.mq5` | Kept unchanged. Commit `cae310b`. 1.61 plus sessions, killzones & macros. |
@@ -20,6 +21,78 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - Zone settings and zone presets saved by 1.63 or 1.64 can't be read by 1.62 (details under 1.63).
 - 1.63 reads zone settings saved by 1.64 and ignores the two settings 1.64 adds.
 - Drawings saved by 1.65 open in every earlier version (details under 1.65).
+- 1.66 keeps its risk settings in separate files, so 1.65 opens everything 1.66 saves.
+
+## 1.66
+
+**Lot size from your risk.** Press on the chart, drag to your stop and release. The box shows the volume whose loss at the stop matches your risk per trade, commission included.
+
+**Making a measurement:**
+- Click **Risk** on the toolbar, or press Ctrl+Shift+R (input `InpRiskHotkey`). Until you've saved risk settings, the first measurement of a session opens the Risk window so you can check your risk per trade.
+- **Market entry** (the default): press anywhere, drag to your stop and release.
+  - The entry is the live ask for a buy and the bid for a sell. It moves with every tick, so the size stays right until you place the order.
+  - A stop below the bid makes it a buy; a stop above the ask makes it a sell.
+- **A price you choose** (limit or stop order): press at your entry, drag to your stop and release. Or click the entry, then click the stop.
+  - The tag names the order to place: BUY LIMIT, BUY STOP, SELL LIMIT or SELL STOP.
+- **Market / Limit** on the risk bar under the toolbar switches between the two. The choice is remembered.
+- **No magnet:** the stop and entry stay where you put them, rounded only to the symbol's tick size.
+
+**On the chart:**
+- **Lines:** a grey entry line (dashed while it follows the market), a red stop line and green target lines, with red and green areas behind the candles.
+- **Price tags** at the right edge, for example:
+  - "BUY 0.47 lots at market 1.10010"
+  - "SL 1.09800  -21.0 pips  -98.70 USD (0.99%)"
+  - "TP1  2R  1.10430  +42.0 pips  +197.40 USD"
+- **Distances** are in pips on forex, and a price difference elsewhere.
+- **Before you press,** the crosshair already shows the size for a stop at the pointer.
+
+**Adjusting:**
+- Drag the stop, a target or (for a price you choose) the entry. A plain click moves nothing.
+- Targets set as an R multiple follow the stop; a dragged target keeps its price.
+- Double-click a target line to remove it.
+
+**Targets:**
+- New measurements start with the targets set in the Risk window (2R by default; "1 2 3" gives three).
+- **+TP** on the risk bar adds targets at the R multiples typed next to it: one (3) or several (1.5 3 5).
+- **-TP** removes the farthest target. A measurement holds up to 8 targets.
+
+**One-off:** the measurement isn't saved. Esc, × on the risk bar or a new measurement removes it.
+
+**Risk window** (the "Risk ..." button on the risk bar):
+- **Risk per trade:** a fixed amount, % of balance, % of equity, or % of a fixed base (for example a prop firm's starting balance).
+- **Commission per lot,** round turn, set per symbol. It adds to the loss at the stop and comes off target profits.
+- **Defaults:** the entry type and the starting targets.
+- **Value of 1.00 lot** on the chart's symbol, from each method below, with a field for your own value.
+- **Saving:** settings are saved per trading account and shared by every chart and workspace of that account.
+- **Preview:** while the window is open, the box on the chart shows its settings before you press OK.
+
+**The value of a lot.** Index CFDs differ between brokers (US100 can be 1, 10 or 20 USD per point per lot), and some brokers publish a wrong tick value. The tool takes the value from, in order:
+1. **Your own value** for the symbol, from your broker's contract specification. It's typed per pip on forex and per 1.0 move elsewhere.
+2. **The calibration** from the new script, `Fibonacci_Pro_Calibrate.mq5` (below).
+3. **The contract size checked against the tick value.**
+   - When the two agree within 2%, the larger is used, so the volume errs small.
+   - When they disagree, there is no size. The Risk window shows both, with buttons to use either one, and suggests calibrating.
+
+**Volume rules:**
+- Lots are always rounded down to the volume step.
+- Below the minimum volume, the tag says so and shows what the minimum would lose.
+- Above the maximum volume, the size is capped.
+
+**Calibration script** (`Fibonacci_Pro_Calibrate.mq5`, installed in `MQL5/Scripts`). MT5 doesn't let indicators call its profit calculation, but scripts can. Drop the script on any chart:
+- **What it measures:** for every Market Watch symbol (or only the chart's symbol, an input), how much 1.00 lot gains or loses over a price move. It uses the same calculation the terminal uses for your positions.
+- **Where it saves:** one file per trade server, which every chart picks up within seconds.
+  - Values for symbols no longer in Market Watch are kept.
+  - A readable copy (`.csv`) is written next to it.
+- **What it reports:** each symbol in the Experts log, with whether the contract size and tick value agree, and a summary of the symbols where they don't.
+- **Two sources outvote one:** if the contract size and the tick value agree with each other but not with the terminal's calculation, the symbol isn't calibrated (and an older calibration of it is dropped), so the tool uses the two that agree.
+- **No orders:** it sends none. Run it again if your broker changes contract sizes; a changed contract size voids the old value.
+
+**Currency conversion.** When the symbol's profit currency differs from the account currency, the value is converted at the current rate of a symbol that quotes the two. That symbol is looked for in Market Watch, then in the full symbol list; one found only in the full list is added to Market Watch, because MT5 only streams quotes for Market Watch symbols.
+
+**Files.**
+- **Risk settings:** `FibonacciPro\<server>_<login>.risk`.
+- **Calibration:** `FibonacciPro\<server>.calib`, plus the readable `.calib.csv`.
+- **Everything else:** drawings, presets and zone settings are unchanged.
 
 ## 1.65
 

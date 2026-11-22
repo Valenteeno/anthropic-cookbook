@@ -1,10 +1,10 @@
 # Fibonacci Pro (MetaTrader 5 indicator)
 
-**Current version: 1.65, `Fibonacci_Pro_11.mq5`.** Earlier versions are kept side by side; `CHANGELOG.md` has the version table and the changes in each version.
+**Current version: 1.66, `Fibonacci_Pro_12.mq5`, with the script `Fibonacci_Pro_Calibrate.mq5`.** Earlier versions are kept side by side; `CHANGELOG.md` has the version table and the changes in each version.
 
-Install: copy `Fibonacci_Pro_11.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Remove any older copy from the chart first. Saved drawings, presets and the toolbar position carry over between versions (same files, same format). Zone settings carry over to newer versions. 1.63 can read zone settings saved by 1.64, but 1.62 can't read those saved by 1.63 or 1.64.
+Install: copy `Fibonacci_Pro_12.mq5` to `MQL5/Indicators`, compile it in MetaEditor, then attach it to a chart. Remove any older copy from the chart first. For the lot-size calibration, also copy `Fibonacci_Pro_Calibrate.mq5` to `MQL5/Scripts` and compile it; run it by dropping it on any chart. Saved drawings, presets and the toolbar position carry over between versions (same files, same format). Zone settings carry over to newer versions. 1.63 can read zone settings saved by 1.64, but 1.62 can't read those saved by 1.63 or 1.64.
 
-1.62 added sessions, killzones & macros. 1.63 gave every zone its own marker strip, which you can drag into place, and added tooltips on zone lines. 1.64 blends Fib and zone shading, so killzones stay visible over Fib ranges. 1.65 recognises what you draw (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR) and styles, colours and names it by type and timeframe. See `CHANGELOG.md`. The sections below describe the fixes and features introduced in 1.60, which later versions build on.
+1.62 added sessions, killzones & macros. 1.63 gave every zone its own marker strip, which you can drag into place, and added tooltips on zone lines. 1.64 blends Fib and zone shading, so killzones stay visible over Fib ranges. 1.65 recognises what you draw (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR) and styles, colours and names it by type and timeframe. 1.66 adds a lot size & risk crosshair: press, drag to your stop, and it shows the volume for your risk per trade. A calibration script measures each symbol's value per lot, for brokers whose contract sizes or tick values differ. See `CHANGELOG.md`. The sections below describe the fixes and features introduced in 1.60, which later versions build on.
 
 ## Why it sometimes did not attach, or stopped responding
 
@@ -58,7 +58,7 @@ Level labels now use a fixed 15 px font height, so their size no longer depends 
 
 ## Verification
 
-MetaEditor is not available on Linux. `tests/` contains a mock-MQL5 harness: `translate.py` rewrites the source as C++ against stubbed MT5 APIs (`mql5_stubs.h`), `mql5_defaults.h` gives every MT5 function an inert default, and `tests.cpp` checks:
+MetaEditor is not available on Linux. `tests/` contains a mock-MQL5 harness: `translate.py` rewrites the source as C++ against stubbed MT5 APIs (`mql5_stubs.h`), `mql5_defaults.h` gives every MT5 function an inert default, and `test_common.h` holds the fakes both test programs share (chart objects, clock, files in memory, and a market with symbols, quotes and an account). `tests.cpp` checks the indicator:
 
 - the 1.61 behaviour (defaults, label placement, masks, list);
 - calendar, daylight-saving and broker-clock conversion, including the US/EU mismatch weeks;
@@ -74,14 +74,25 @@ MetaEditor is not available on Linux. `tests/` contains a mock-MQL5 harness: `tr
 - marker strips for every marker position: separate strips, Auto and Fixed stacking, and drag to place with Esc to undo;
 - line tooltips: midline, extended high and low with their taken status, range box edges and opening price;
 - an end-to-end render smoke test;
-- the Zones window: tabs, edits, popups, palette, presets and apply.
+- the Zones window: tabs, edits, popups, palette, presets and apply;
+- lot size & risk: the volume calculation (rounded down, commission, minimum and maximum volume, and a 20,000-case check that the loss never exceeds the risk and is never a whole step short of it), the four risk modes, sides and entries at market and at a chosen price, targets, the value of a lot by each method with currency conversion, calibration, the settings files, the Risk window, and the measurement made with the mouse from start to finish.
+
+`calib_tests.cpp` runs the calibration script against a fake terminal: the measured values, merging with an existing file, the readable report, the backup, the rule that two agreeing sources outvote the third, and the failure cases (not logged in, no quotes, a calculation the terminal refuses, a damaged file).
 
 ```bash
-cd tests && python3 translate.py ../Fibonacci_Pro_11.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
+cd tests && python3 translate.py ../Fibonacci_Pro_12.mq5 fp5.cpp && g++ -std=c++17 -fsyntax-only -Wall fp5.cpp
 ```
 
 ```bash
 g++ -std=c++17 -w -fsanitize=address,undefined tests.cpp -o tests && ./tests
+```
+
+```bash
+python3 translate.py ../Fibonacci_Pro_Calibrate.mq5 calib.cpp && g++ -std=c++17 -fsyntax-only -Wall calib.cpp
+```
+
+```bash
+g++ -std=c++17 -w -fsanitize=address,undefined calib_tests.cpp -o calib_tests && ./calib_tests
 ```
 
 This catches typos, wrong signatures and logic errors. It does not replace a MetaEditor compile and a test on a live chart.

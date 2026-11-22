@@ -1,4 +1,4 @@
-"""Translate an MQL5 indicator into C++ against mql5_stubs.h for a g++ -fsyntax-only check."""
+"""Translate an MQL5 indicator or script into C++ against mql5_stubs.h for a g++ -fsyntax-only check."""
 import re, sys
 
 src = open(sys.argv[1], encoding="utf-8").read()
@@ -38,9 +38,14 @@ def repl(m):
     return f"{ret} {name}({strip_defaults(params)}){rest}"
 body = func_re.sub(repl, code)
 
-# Prototypes must follow the struct definitions they mention.
+# Prototypes must follow the struct definitions they mention: at the indicator's marker,
+# or (scripts) right after the last structure definition.
 marker = "// PURE_GEOMETRY_BEGIN"
-idx = body.index(marker)
+if marker in body:
+    idx = body.index(marker)
+else:
+    ends = list(re.finditer(r"^\s*\};[ \t]*$", body, re.M))
+    idx = ends[-1].end() + 1 if ends else 0
 result = "\n".join(header) + "\n" + body[:idx] + "\n" + "\n".join(protos) + "\n" + body[idx:]
 open(sys.argv[2], "w", encoding="utf-8").write(result)
 print(f"{len(protos)} functions, {len(colors)} colours")
