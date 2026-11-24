@@ -107,6 +107,7 @@ datetime iTime(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iOpen(cons
 double iHigh(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iLow(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iClose(const string& sym,ENUM_TIMEFRAMES tf,int shift);
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,int start,int count,MQLArr<MqlRates>& rates);
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,datetime from,datetime to,MQLArr<MqlRates>& rates);
+int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,datetime start,int count,MQLArr<MqlRates>& rates);
 datetime TimeTradeServer();datetime TimeGMT();datetime TimeCurrent();bool PlaySound(const string& file);bool SendNotification(const string& text);
 bool GlobalVariableTemp(const string& name);bool GlobalVariableSetOnCondition(const string& name,double value,double check);
 long FileGetInteger(const string& name,ENUM_FILE_PROPERTY_INTEGER prop,bool common=false);

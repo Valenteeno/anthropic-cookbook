@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.66 | `Fibonacci_Pro_12.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.65 with a lot size & risk crosshair, and a calibration script for it. |
+| 1.67 | `Fibonacci_Pro_13.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.66 with ICT price points and numbered drawing names. The calibration script is unchanged (1.66). |
+| 1.66 | `Fibonacci_Pro_12.mq5` | Kept unchanged. Commit `f3625ea`. 1.65 with a lot size & risk crosshair, and a calibration script for it. |
 | 1.65 | `Fibonacci_Pro_11.mq5` | Kept unchanged. Commit `b9395f4`. Drawings typed automatically (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR), coloured by timeframe. |
 | 1.64 | `Fibonacci_Pro_10.mq5` | Kept unchanged. Commit `bece2ee`. Fib and zone shading blended, so killzones stay visible over Fib ranges. |
 | 1.63 | `Fibonacci_Pro_9.mq5` | Kept unchanged. Commit `e083f0a`. Separate marker strips you can place, and tooltips on zone lines. |
@@ -22,6 +23,86 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - 1.63 reads zone settings saved by 1.64 and ignores the two settings 1.64 adds.
 - Drawings saved by 1.65 open in every earlier version (details under 1.65).
 - 1.66 keeps its risk settings in separate files, so 1.65 opens everything 1.66 saves.
+- 1.67 keeps price point settings in separate files, so 1.66 opens everything 1.67 saves.
+
+## 1.67
+
+**Price points.** The ICT price points, drawn for every day, week or month of a look-back, in their own window: **Points** on the toolbar, and Ctrl+Shift+L (input `InpPointsHotkey`) shows or hides them. All 55 levels are in 30 rows, plus NWOG:
+
+| Group | Rows | Lines |
+|---|---|---|
+| Gaps | ORG, NDOG, NWOG | open, close, CE, and the gap as a zone |
+| Pre-sessions | MN, LN and NY pre-sessions, London Close, NY Lunch | high, low |
+| Opening ranges | Midnight open; the MN, LN, NY AM, LC and NY PM opening ranges | open; high, low |
+| FPFVG & FPOB | The first M1 FVG and order block of the MN, LN, NY AM, LC and NY PM windows | the zone and its CE |
+| Sessions | Asia, London, New York | high, low |
+| OHLC | Day, week, month | high, low (open, close and CE as options) |
+
+At first only the Asia, London and New York highs and lows, and NDOG, are switched on.
+
+**How they anchor:**
+- **Clock:** times are New York times, converted with the broker clock set in the Zones window, so daylight-saving weeks stay right.
+- **To the minute:** each high and low starts at the M1 candle that made it, even on an H1 or H4 chart.
+- **Trading days:** a trading day runs from 17:00 to 17:00 New York. The look-back counts trading days (Monday to Friday), not calendar days.
+- **Window ends:** a window ends before its end minute (09:30 - 10:00 reads the 09:30 to 09:59 candles).
+- **ORG and NDOG:** the ORG close is the regular session's close of the session day before; a holiday is skipped. Monday has no NDOG, because its gap is the NWOG.
+- **Week opens with** (Parameters) sets NWOG and the weekly open, and is your choice:
+  - the first candle after the weekend: the Sunday candle if your broker has one, otherwise Monday's (the default);
+  - always Monday's first candle.
+- **FPFVG:** the FVG's middle candle opens inside the window.
+- **FPOB:** the last opposite candle before the first close beyond a swing that formed in the window (or within 10 minutes after it).
+- **Day, week and month levels** come from H1 candles, refined to the minute.
+
+**Lines end where price takes them** (Parameters, on by default):
+- **Highs and lows:** a high ends at the first candle trading above it, a low below it.
+- **Opens, closes and CEs** end when price comes back to them after leaving them.
+- **Zones:** a gap, FVG or order block ends when it is filled, that is when price reaches its far edge. Its CE and near edge end where price reaches them.
+- **Taken levels** are dimmed (the default), hidden, or kept as drawn.
+- **Off:** every line runs to the right edge.
+- **Per row:** **Ends** follows Parameters, or always ends where taken, or always runs on.
+- **Alerts** are set per row: a sound and/or a push notification when price takes one of its levels, once per level across every chart of the workspace.
+
+**On the chart:**
+- **Style by role:** opens dashed, closes solid, highs dash-dot-dot, lows dash-dot and CEs dotted; the edges of gaps and zones are solid.
+- **Colours** follow the Zones window's session colours.
+- **Labels** sit at the line ends, stacked so they never overlap. Names at the same price merge into one label ("LSH / NYH").
+  - A label shows the name, the name and day, or the name and price, for every row or per row.
+- **Zones** are shaded behind the candles (order blocks lighter, FVGs darker) and blend with Fib and session shading.
+- **Off-screen levels:** arrows at the top or bottom edge show untaken levels above or below the visible prices.
+- **Pinned names** (an option): a line that starts off screen also shows its name at the left edge.
+- **Hover info:** the name, price, when it formed, and whether and when it was taken. For zones: the top, bottom, CE and size.
+
+**Select one** by clicking it. Three buttons appear:
+- **Ray back:** extends it to the left edge of the chart.
+- **Hide:** hides it.
+- **Row:** opens its row in the window.
+
+Ray back and Hide apply to this chart only and are remembered. Esc or a click elsewhere deselects it. A row can ray back by default, and its ... options show hidden levels again.
+
+**The window,** laid out like the Zones window:
+- **Parameters:** groups, look-back (days, weeks, months), lines end where taken, week open, alerts.
+- **Visualization:** the highest timeframe for each group, labels, label size, merged labels, pinned names, arrows, hover info.
+- **Fill:** zone shading, opacity (with a slider), OB and FVG shades, range boxes.
+- **Price points:** a table with a filter for each group.
+  - Click **Name** or **Start / End** to sort; click again to reverse.
+  - Each row sets on/off, name, times, parts (O, H, L, C, CE, Box), style (by role, or one style), width, colour, label and ends.
+  - Its ... options set the group, the type (range, open, FVG, order block), line names, Mondays only, ray back, the alert, and show hidden levels again.
+- **Presets:** save and load, with two built in (ICT price points, All off).
+- **Shared:** settings are shared by every chart of the workspace.
+
+**Fib drawings are numbered** per timeframe and type: "H1 FVG 1 ▲", "H1 FVG 2 ▼", "H1 KH 3".
+- Both directions share one count, and each timeframe counts separately.
+- The next number is one more than the highest in use.
+- Existing names are left alone. A 1.66 name without a number counts as 1.
+- A duplicate of a typed drawing gets the next number.
+
+**Toolbar:** the title is now ":: Fibonacci Pro 1.67" (drag it to move the toolbar), to make room for the Points button.
+
+**Files:**
+- **Price point settings:** `FibonacciPro\<server>_<login>_<workspace>.points`.
+- **Levels hidden or rayed back on a chart:** next to that chart's drawings, in `<drawings file>.pts`.
+- **Presets:** `FibonacciPro\Presets\*.fpt`.
+- **Everything else** is unchanged, and 1.66 ignores the new files.
 
 ## 1.66
 

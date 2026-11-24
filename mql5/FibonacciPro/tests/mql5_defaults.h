@@ -65,6 +65,7 @@ datetime TimeTradeServer(){return 0;}datetime TimeGMT(){return 0;}datetime TimeC
 #endif
 #ifndef TEST_OWN_RATES
 int CopyRates(const string&,ENUM_TIMEFRAMES,datetime,datetime,MQLArr<MqlRates>&){return 0;}
+int CopyRates(const string&,ENUM_TIMEFRAMES,datetime,int,MQLArr<MqlRates>&){return 0;}
 #endif
 #ifndef TEST_OWN_ALERTS
 bool PlaySound(const string&){return true;}bool SendNotification(const string&){return true;}
