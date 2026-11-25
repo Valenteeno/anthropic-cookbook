@@ -1,4 +1,4 @@
-// Behavioural tests for Fibonacci_Pro_14.mq5 (1.68), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_15.mq5 (1.69), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
@@ -146,10 +146,11 @@ static void PPMakeBars(datetime to)
 static void PPScanAll(datetime now){for(int pass=0;pass<20;pass++)for(int i=0;i<g_pocc_n;i++)PPScan(g_pocc[i],g_pact.rows[g_pocc[i].row].kind,now);}
 
 // A price points file as 1.67 wrote it (schema 1), with extra settings flags.
-static void WritePointsV1(const string& name,FPPointConfig& c,int extra_flags)
+// A settings file as 1.67 (schema 1) or 1.68 (schema 2) wrote it.
+static void WritePointsV1(const string& name,FPPointConfig& c,int extra_flags,int schema=1)
   {
    int f=FileOpen(name,FILE_WRITE|FILE_BIN,'\t',0);
-   FileWriteInteger(f,FPP_MAGIC,4);FileWriteInteger(f,1,4);
+   FileWriteInteger(f,FPP_MAGIC,4);FileWriteInteger(f,schema,4);
    int flags=(c.enabled?1:0)|(c.end_taken?2:0)|(c.merge?4:0)|(c.pin_left?8:0)|(c.offscreen?16:0)|(c.hover?32:0)|(c.fill?64:0)
              |(c.range_fill?128:0)|(c.alert_sound?256:0)|(c.alert_push?512:0)|extra_flags;
    FileWriteInteger(f,flags,4);
@@ -157,13 +158,14 @@ static void WritePointsV1(const string& name,FPPointConfig& c,int extra_flags)
    FileWriteInteger(f,c.days_back,4);FileWriteInteger(f,c.weeks_back,4);FileWriteInteger(f,c.months_back,4);
    FileWriteInteger(f,c.taken_show,4);FileWriteInteger(f,c.week_open,4);FileWriteInteger(f,c.label_mode,4);FileWriteInteger(f,c.label_size,4);
    FileWriteInteger(f,c.opacity,4);FileWriteInteger(f,c.tint,4);
+   if(schema>=2)FileWriteInteger(f,c.taken_end,4);
    FileWriteInteger(f,c.count,4);
    for(int i=0;i<c.count;i++)
      {
       WText(f,c.rows[i].name);WText(f,c.rows[i].hname);WText(f,c.rows[i].lname);
       int v[]={c.rows[i].kind,c.rows[i].sub,c.rows[i].group,c.rows[i].start,c.rows[i].end,c.rows[i].len,c.rows[i].swing,c.rows[i].look,c.rows[i].parts,
                c.rows[i].style,c.rows[i].width,(int)c.rows[i].ink,c.rows[i].label,c.rows[i].ends,c.rows[i].sample,(int)c.rows[i].uid};
-      for(int x:v)FileWriteInteger(f,x,4);
+      for(int k=0;k<16;k++){if(k==15 && schema>=2)FileWriteInteger(f,c.rows[i].bold,4);FileWriteInteger(f,v[k],4);}
       FileWriteInteger(f,(c.rows[i].enabled?1:0)|(c.rows[i].ray?2:0)|(c.rows[i].alert?4:0),4);
      }
    FileWriteInteger(f,FPP_END,4);FileClose(f);
@@ -1171,7 +1173,7 @@ int main()
     int mno=FindRow(pc,"Midnight open"),fvg=FindRow(pc,"NY FPFVG AM"),obam=FindRow(pc,"NY FPOB AM"),obpm=FindRow(pc,"NY FPOB PM");
     int day=FindRow(pc,"Day"),week=FindRow(pc,"Week"),month=FindRow(pc,"Month");
     CHECK(org==0 && ndog==1 && nwog==2 && asia==24 && lon==25 && nys==26 && mno==8 && fvg==18 && obam==19 && obpm==23 && day==27 && week==28 && month==29);
-    CHECK(FPPPartName(pc.rows[lon],0)=="LSH" && FPPPartName(pc.rows[lon],1)=="LSL" && FPPPartName(pc.rows[lon],2)=="London CE");
+    CHECK(FPPPartName(pc.rows[lon],0)=="LNH" && FPPPartName(pc.rows[lon],1)=="LNL" && FPPPartName(pc.rows[lon],2)=="LN CE");
     CHECK(FPPPartName(pc.rows[day],0)=="HOD" && FPPPartName(pc.rows[day],4)=="OOD" && FPPPartName(pc.rows[week],5)=="COW" && FPPPartName(pc.rows[month],1)=="LOM");
     CHECK(FPPPartName(pc.rows[ndog],4)=="NDOG open" && FPPPartName(pc.rows[ndog],5)=="NDOG close" && FPPPartName(pc.rows[mno],4)=="MNO");
     CHECK(FPPPartName(pc.rows[fvg],0)=="NY FPFVG AM top" && FPPPartName(pc.rows[fvg],3)=="NY FPFVG AM" && FPPPartName(pc.rows[fvg],2)=="NY FPFVG AM CE");
@@ -1322,16 +1324,16 @@ int main()
     g_pact.end_taken=true;g_pact.rows[lon].ends=0;
     // Labels: names at the line ends; per row or for all; merged at one price; stacked, never overlapping.
     g_dirty=true;Render();
-    CHECK(LabelWith("LSH")>=0 && LabelWith("LSL")>=0 && LabelWith("NY FPFVG AM "+Glyph(0x25BC))>=0 && LabelWith("NY FPFVG AM CE")<0);
-    {int k=LabelWith("LSH");CHECK(g_pplabel[k].x==785-18-4 && g_pplabel[k].y==285-14-1);}
-    g_pact.label_mode=2;g_dirty=true;Render();CHECK(LabelWith("LSH 1.10500")>=0);
-    g_pact.label_mode=1;g_dirty=true;Render();CHECK(LabelWith("LSH Tue 17")>=0);
+    CHECK(LabelWith("LNH")>=0 && LabelWith("LNL")>=0 && LabelWith("NY FPFVG AM "+Glyph(0x25BC))>=0 && LabelWith("NY FPFVG AM CE")<0);
+    {int k=LabelWith("LNH");CHECK(g_pplabel[k].x==785-18-4 && g_pplabel[k].y==285-14-1);}
+    g_pact.label_mode=2;g_dirty=true;Render();CHECK(LabelWith("LNH 1.10500")>=0);
+    g_pact.label_mode=1;g_dirty=true;Render();CHECK(LabelWith("LNH Tue 17")>=0);
     g_pact.label_mode=3;g_dirty=true;Render();CHECK(g_pplabel_n==0);
-    g_pact.label_mode=0;g_pact.rows[lon].label=3;g_dirty=true;Render();CHECK(LabelWith("LSH 1.10500")>=0 && LabelWith("NYH 1.")<0);
+    g_pact.label_mode=0;g_pact.rows[lon].label=3;g_dirty=true;Render();CHECK(LabelWith("LNH 1.10500")>=0 && LabelWith("NYH 1.")<0);
     g_pact.rows[lon].label=0;
-    g_pact.rows[lon].ends=2;g_dirty=true;Render();{int m=LabelWith("LSH / NYH");CHECK(m>=0 && LabelWith("NYH")==m);}
+    g_pact.rows[lon].ends=2;g_dirty=true;Render();{int m=LabelWith("LNH / NYH");CHECK(m>=0 && LabelWith("NYH")==m);}
     g_pact.merge=false;g_dirty=true;Render();
-    {int a1=LabelWith("LSH"),b1=LabelWith("NYH");CHECK(a1>=0 && b1>=0 && a1!=b1 && (g_pplabel[a1].y+14<=g_pplabel[b1].y || g_pplabel[b1].y+14<=g_pplabel[a1].y));
+    {int a1=LabelWith("LNH"),b1=LabelWith("NYH");CHECK(a1>=0 && b1>=0 && a1!=b1 && (g_pplabel[a1].y+14<=g_pplabel[b1].y || g_pplabel[b1].y+14<=g_pplabel[a1].y));
      bool clear=true;
      for(int p=0;p<g_pplabel_n;p++)for(int q=p+1;q<g_pplabel_n;q++)
        {
@@ -1345,7 +1347,7 @@ int main()
     // Ray back (row default) and names pinned at the left edge.
     g_first_bar=SV(2026,11,16,0,0);                                                                                 // the chart's oldest candle: Monday 00:00
     g_pact.rows[lon].ray=true;g_pact.pin_left=true;g_dirty=true;Render();
-    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0==-1440);int p=-1;for(int q=0;q<g_pplabel_n;q++)if(g_pplabel[q].w>0 && g_pplabel[q].x==4 && g_pplabel[q].text=="LSH")p=q;CHECK(p>=0);}
+    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0==-1440);int p=-1;for(int q=0;q<g_pplabel_n;q++)if(g_pplabel[q].w>0 && g_pplabel[q].x==4 && g_pplabel[q].text=="LNH")p=q;CHECK(p>=0);}
     g_pact.rows[lon].ray=false;g_pact.pin_left=false;
     // Below the visible prices: an arrow at the edge, unless switched off.
     g_height=280;g_dirty=true;Render();
@@ -1357,7 +1359,7 @@ int main()
     {int occ=-1,part=-1;CHECK(FindPPAt(500,286,occ,part) && occ==l && part==0);
      MQLArr<string> lines;color accent=clrNONE;PPTip(occ,part,lines,accent);
      std::vector<string> v(lines.v.begin(),lines.v.end());
-     CHECK(lines[0]=="LSH" && PPHasLine(v,"Price\t1.10500") && PPHasLine(v,"Status\tTaken Tue 13:05 New York") && PPHasLine(v,"Formed\tTue 05:12 New York") && accent==clrRoyalBlue);}
+     CHECK(lines[0]=="LNH" && PPHasLine(v,"Price\t1.10500") && PPHasLine(v,"Status\tTaken Tue 13:05 New York") && PPHasLine(v,"Formed\tTue 05:12 New York") && accent==clrRoyalBlue);}
     g_pact.rows[fvg].parts=FPPP_BOX;g_dirty=true;Render();
     {int occ=-1,part=-1;CHECK(FindPPAt(660,297,occ,part) && occ==fv && part==3);
      MQLArr<string> lines;color accent=clrNONE;PPTip(occ,part,lines,accent);std::vector<string> v(lines.v.begin(),lines.v.end());
@@ -1368,19 +1370,20 @@ int main()
     g_pflag_store="mem.pts";g_disk.erase("mem.pts");g_pflag_n=0;
     CHECK(PPPress(500,285) && g_psel_uid==g_pact.rows[lon].uid && g_psel_key==dtue && g_psel_part==0);
     g_dirty=true;Render();CHECK(g_psel==l);
-    g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("X.Ray"))>=0 && RegFind(UIS("X.Hide"))>=0 && RegFind(UIS("X.Row"))>=0 && HitUI(g_pchip_x+5,g_pchip_y+5));
+    g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("X.RayB"))>=0 && RegFind(UIS("X.RayF"))>=0 && RegFind(UIS("X.Hide"))>=0 && RegFind(UIS("X.Row"))>=0 && HitUI(g_pchip_x+5,g_pchip_y+5));
     {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].sel && g_ppline[k].width==2 && g_ppline[k].alpha==255);}      // selected: thicker, full strength
-    PPChipClick("Ray");g_dirty=true;Render();
-    CHECK(g_pflag_n==1 && g_pflags[0].flags==1 && g_disk.count("mem.pts")==1 && g_ppline[LineOf(l,0)].x0==-1440 && g_ppline[LineOf(l,1)].x0==-1440);
-    CHECK(LineOf(OccOf(lon,dmon),0)>=0 && g_ppline[LineOf(OccOf(lon,dmon),0)].x0<0);                               // only that day's London
-    PPChipClick("Ray");g_dirty=true;Render();CHECK(g_pflag_n==0 && g_ppline[LineOf(l,0)].x0==312);
-    g_pact.rows[lon].ray=true;PPChipClick("Ray");CHECK(g_pflag_n==1 && g_pflags[0].flags==2);g_dirty=true;Render();  // the row rays; this day not
-    CHECK(g_ppline[LineOf(l,0)].x0==312 && FPPRay(g_pocc[OccOf(lon,dmon)],g_pact.rows[lon]) && !FPPRay(g_pocc[l],g_pact.rows[lon]));
-    PPChipClick("Ray");CHECK(g_pflag_n==0);g_pact.rows[lon].ray=false;
+    {int k=LineOf(l,1);CHECK(k>=0 && !g_ppline[k].sel && g_ppline[k].width==1);}                                  // only the line clicked
+    PPChipClick("RayB");g_dirty=true;Render();
+    CHECK(g_pflag_n==1 && g_pflags[0].part==0 && g_pflags[0].flags==1 && g_disk.count("mem.pts")==1 && g_ppline[LineOf(l,0)].x0==-1440 && g_ppline[LineOf(l,1)].x0==587);
+    CHECK(LineOf(OccOf(lon,dmon),0)>=0 && g_ppline[LineOf(OccOf(lon,dmon),0)].x0<0);                               // only that day's London high
+    PPChipClick("RayB");g_dirty=true;Render();CHECK(g_pflag_n==0 && g_ppline[LineOf(l,0)].x0==312);
+    g_pact.rows[lon].ray=true;PPChipClick("RayB");CHECK(g_pflag_n==1 && g_pflags[0].flags==2);g_dirty=true;Render();  // the row rays; this line not
+    CHECK(g_ppline[LineOf(l,0)].x0==312 && g_ppline[LineOf(l,1)].x0==-1440 && FPPRay(g_pocc[OccOf(lon,dmon)],g_pact.rows[lon]));
+    PPChipClick("RayB");CHECK(g_pflag_n==0);g_pact.rows[lon].ray=false;
     PPChipClick("Hide");g_dirty=true;Render();
-    CHECK(g_psel_uid==0 && LineOf(l,0)<0 && LineOf(l,1)<0 && PPHiddenCount(g_pact.rows[lon].uid)==1);
-    g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("X.Ray"))<0);
-    PPLoadFlags();CHECK(g_pflag_n==1 && g_pflags[0].key==dtue && g_pflags[0].flags==4);                            // read back from the file
+    CHECK(g_psel_uid==0 && LineOf(l,0)<0 && LineOf(l,1)>=0 && PPHiddenCount(g_pact.rows[lon].uid)==1);           // London's high hidden, its low still there
+    g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("X.RayB"))<0);
+    PPLoadFlags();CHECK(g_pflag_n==1 && g_pflags[0].key==dtue && g_pflags[0].part==0 && g_pflags[0].flags==4);   // read back from the file
     PPShowHidden(g_pact.rows[lon].uid);g_dirty=true;Render();CHECK(g_pflag_n==0 && LineOf(l,0)>=0);
     CHECK(PPPress(500,285));{long lp=27;double dp=0;string sp="";OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);CHECK(g_psel_uid==0);}   // Esc
     BeginMouse(500,285);CHECK(g_psel_uid==g_pact.rows[lon].uid);BeginMouse(500,100);CHECK(g_psel_uid==0);                         // a click elsewhere
@@ -1465,12 +1468,14 @@ int main()
     PPPopupClick(Obj("Q.S1"));ClosePopup();BuildUI();CHECK(g_pedit.rows[25].sample==1);
     PPPopupClick(Obj("Q.S0"));ClosePopup();BuildUI();
     ObjectSetString(0,Obj("Q.HName"),OBJPROP_TEXT," London high ");PPPopupEndEdit(Obj("Q.HName"));CHECK(g_pedit.rows[25].hname=="London high");
+    ObjectSetString(0,Obj("Q.SName"),OBJPROP_TEXT," LDN ");PPPopupEndEdit(Obj("Q.SName"));CHECK(g_pedit.rows[25].sname=="LDN");   // name on the chart (1.69)
+    ObjectSetString(0,Obj("Q.SName"),OBJPROP_TEXT,"");PPPopupEndEdit(Obj("Q.SName"));CHECK(g_pedit.rows[25].sname=="");
     PPPopupClick(Obj("Q.G1"));ClosePopup();BuildUI();CHECK(g_pedit.rows[25].group==1 && g_popup==16);
     PPPopupClick(Obj("Q.K3"));ClosePopup();BuildUI();CHECK(g_pedit.rows[25].kind==FPPK_FVG && g_pedit.rows[25].parts==(FPPP_BOX|FPPP_CE) && RegFind(Obj("Q.Len"))>=0);
     ObjectSetString(0,Obj("Q.Len"),OBJPROP_TEXT,"45");PPPopupEndEdit(Obj("Q.Len"));CHECK(g_pedit.rows[25].len==45);
     ObjectSetString(0,Obj("Q.Len"),OBJPROP_TEXT,"abc");PPPopupEndEdit(Obj("Q.Len"));CHECK(g_pedit.rows[25].len==45);
     PPPopupClick(Obj("Q.Done"));CHECK(g_popup==0);
-    {uint u=g_pedit.rows[24].uid;PPSetFlags(u,dtue,4);g_ui_dirty=true;BuildUI();
+    {uint u=g_pedit.rows[24].uid;PPSetFlags(u,dtue,-1,4,0);g_ui_dirty=true;BuildUI();
      PointsClick("More25");CHECK(RegFind(Obj("Q.Show"))>=0);PPPopupClick(Obj("Q.Show"));CHECK(PPHiddenCount(u)==0);ClosePopup();}
     // Sorting: by name (again to reverse), by time of day (evening rows first, periods last).
     PointsClick("SortName");CHECK(g_pedit.rows[0].name=="Asia" && g_psort==1 && !g_psort_desc && g_ui_dirty);
@@ -1478,7 +1483,7 @@ int main()
     PointsClick("SortTime");CHECK(g_pedit.rows[0].name=="NWOG" && g_pedit.rows[1].name=="NDOG" && g_pedit.rows[2].name=="Asia" && g_pedit.rows[29].name=="Month");
     // Add (in the filtered group), remove, defaults.
     PointsClick("Flt4");CHECK(g_pfilter==3);
-    PPSetFlags(31,dtue,4);CHECK(FPPNewUid(g_pedit)==32);PPSetFlags(31,dtue,0);                                     // never an identity with stored levels
+    PPSetFlags(31,dtue,-1,4,0);CHECK(FPPNewUid(g_pedit)==32);PPSetFlags(31,dtue,-1,0,0);                                     // never an identity with stored levels
     PointsClick("Add");CHECK(g_pedit.count==31 && g_pedit.rows[30].kind==FPPK_FVG && g_pedit.rows[30].group==3 && g_pedit.rows[30].uid==31);
     PointsClick("Flt1");PointsClick("Add");CHECK(g_pedit.count==32 && g_pedit.rows[31].kind==FPPK_WINDOW && g_pedit.rows[31].group==4 && g_pfilter==-1);
     PointsClick("Remove32");
@@ -1568,7 +1573,7 @@ int main()
     CHECK((FPPAllowed(FPPK_WINDOW)&(FPPP_Q|FPPP_E))==(FPPP_Q|FPPP_E) && (FPPAllowed(FPPK_GAP)&FPPP_Q)!=0 && (FPPAllowed(FPPK_FVG)&FPPP_E)!=0
           && (FPPAllowed(FPPK_OB)&FPPP_Q)!=0 && (FPPAllowed(FPPK_PERIOD)&(FPPP_Q|FPPP_E))==(FPPP_Q|FPPP_E) && (FPPAllowed(FPPK_OPEN)&(FPPP_Q|FPPP_E))==0);
     CHECK(FPPBitOf(6)==FPPP_Q && FPPBitOf(7)==FPPP_Q && FPPBitOf(8)==FPPP_E && FPPBitOf(11)==FPPP_E && FPPBitOf(2)==FPPP_CE && FPPBitOf(5)==FPPP_C);
-    CHECK(FPPPartName(pc.rows[lon],6)=="London 25%" && FPPPartName(pc.rows[lon],7)=="London 75%" && FPPPartName(pc.rows[lon],8)=="London 12.5%" && FPPPartName(pc.rows[lon],11)=="London 87.5%");
+    CHECK(FPPPartName(pc.rows[lon],6)=="LN 25%" && FPPPartName(pc.rows[lon],7)=="LN 75%" && FPPPartName(pc.rows[lon],8)=="LN 12.5%" && FPPPartName(pc.rows[lon],11)=="LN 87.5%");
     CHECK((FPPTakeable(FPPK_WINDOW)&(1<<3))==0 && (FPPTakeable(FPPK_WINDOW)&(1<<11))!=0 && FPPTakeable(FPPK_OPEN)==(1<<4));
     g_pcfg=pc;g_pcfg.days_back=3;g_pcfg.rows[lon].parts|=FPPP_Q|FPPP_E;g_pcfg.rows[nys].parts|=FPPP_Q;g_pcfg.rows[fvg].enabled=true;g_pcfg.rows[fvg].parts|=FPPP_E;
     g_pact=g_pcfg;g_pocc_dirty=true;
@@ -1586,10 +1591,10 @@ int main()
     CHECK(LineOf(ny,6)<0 && LineOf(ny,0)>=0);                                                                     // a live window: its quadrants not until it ends
     g_width=1000;g_dirty=true;Render();
     CHECK(LineOf(fv,8)>=0 && std::fabs(FPPLevel(g_pocc[fv],8)-(1.1001+0.0017*0.125))<1e-12);                        // an FVG's octants
-    CHECK(LabelWith("25%")>=0 && LabelWith("87.5%")>=0 && LabelWith("London 25%")<0);                              // short labels: the hover names them
+    CHECK(LabelWith("25%")>=0 && LabelWith("87.5%")>=0 && LabelWith("LN 25%")<0);                              // short labels: the hover names them
     {int occ=-1,part=-1;CHECK(FindPPAt(800,308,occ,part) && occ==l && part==6);
      MQLArr<string> lines;color accent=clrNONE;PPTip(occ,part,lines,accent);std::vector<string> v(lines.v.begin(),lines.v.end());
-     CHECK(lines[0]=="London 25%" && PPHasLine(v,"Price\t1.09750") && PPHasLine(v,"Status\tNot taken yet"));}
+     CHECK(lines[0]=="LN 25%" && PPHasLine(v,"Price\t1.09750") && PPHasLine(v,"Status\tNot taken yet"));}
     g_pact.label_mode=2;g_dirty=true;Render();CHECK(LabelWith("25% 1.09750")>=0);g_pact.label_mode=0;
 
     // ---- taken lines run to the take, or to the end of that trading day or week
@@ -1624,15 +1629,18 @@ int main()
     g_cull_ok=true;g_xy_t0=SV(2026,11,16,0,0);g_vt0=SV(2026,11,16,0,0);g_vt1=SV(2026,11,16,16,0);g_dirty=true;Render();
     {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0<0 && g_ppline[k].x1>=g_width-1);}                           // Monday on screen, Tuesday's London high across it
     g_pact.rows[lon].ray=false;g_dirty=true;Render();CHECK(LineOf(l,0)<0);                                        // not rayed: it starts later, off screen
+    PPSetFlags(g_pact.rows[lon].uid,dtue,1,1,0);g_dirty=true;Render();                                          // only its low rayed back (1.69)
+    CHECK(LineOf(l,0)<0 && LineOf(l,1)>=0 && g_ppline[LineOf(l,1)].x0<0 && g_ppline[LineOf(l,1)].x1>=g_width-1);
+    PPSetFlags(g_pact.rows[lon].uid,dtue,1,0,0);
     g_pact.rows[lon].ray=true;g_first_bar=SV(2026,11,16,2,0);g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0==120);}  // history starts on screen
     g_first_bar=0;g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0<=-1000000);}            // history unknown: as far as it goes
     g_cull_ok=false;g_pact.rows[lon].ray=false;g_xy_t0=SV(2026,11,17,0,0);
 
     // ---- bold labels: for every row, or per row
-    {g_dirty=true;Render();int k=LabelWith("LSH");CHECK(k>=0 && !g_pplabel[k].bold);
-     int b0=g_bold_sets;g_pact.label_bold=true;g_dirty=true;Render();k=LabelWith("LSH");CHECK(k>=0 && g_pplabel[k].bold && g_bold_sets>b0);
-     g_pact.rows[lon].bold=2;g_dirty=true;Render();k=LabelWith("LSH");int a2=LabelWith("ASH");CHECK(k>=0 && !g_pplabel[k].bold && a2>=0 && g_pplabel[a2].bold);  // this row regular
-     g_pact.label_bold=false;g_pact.rows[lon].bold=1;g_dirty=true;Render();k=LabelWith("LSH");a2=LabelWith("ASH");CHECK(k>=0 && g_pplabel[k].bold && a2>=0 && !g_pplabel[a2].bold);
+    {g_dirty=true;Render();int k=LabelWith("LNH");CHECK(k>=0 && !g_pplabel[k].bold);
+     int b0=g_bold_sets;g_pact.label_bold=true;g_dirty=true;Render();k=LabelWith("LNH");CHECK(k>=0 && g_pplabel[k].bold && g_bold_sets>b0);
+     g_pact.rows[lon].bold=2;g_dirty=true;Render();k=LabelWith("LNH");int a2=LabelWith("ASH");CHECK(k>=0 && !g_pplabel[k].bold && a2>=0 && g_pplabel[a2].bold);  // this row regular
+     g_pact.label_bold=false;g_pact.rows[lon].bold=1;g_dirty=true;Render();k=LabelWith("LNH");a2=LabelWith("ASH");CHECK(k>=0 && g_pplabel[k].bold && a2>=0 && !g_pplabel[a2].bold);
      g_pact.rows[lon].bold=0;b0=g_bold_sets;g_dirty=true;Render();CHECK(g_bold_sets==b0);}                         // none bold: the bold font is never set
 
     // ---- alerts for a quadrant the row shows
@@ -1704,6 +1712,165 @@ int main()
     {FPPointConfig back;CHECK(FPPReadFile("mem68.points",back) && back.taken_end==1 && back.label_bold && back.days_back==120 && back.rows[25].bold==2
                               && back.rows[25].ends==1 && (back.rows[25].parts&(FPPP_Q|FPPP_E))==(FPPP_Q|FPPP_E));}
     g_count=0;g_selected=-1;g_zact.enabled=true;g_zcfg.enabled=true;g_first_bar=0;g_m1_from=0;
+   }
+
+   // ==== 1.69: zones 120 days back; ray forward; a price point's end dragged by hand;
+   // the sessions' short names on the chart
+   {
+    g_zact.enabled=false;g_zact.broker_mode=1;g_zact.broker_gmt=2;ZoneResolveBroker();
+    g_owner=true;g_hidden=false;g_editor=false;g_zeditor=false;g_reditor=false;g_peditor=false;g_list=false;g_popup=0;g_count=0;g_selected=-1;
+    g_width=1000;g_height=600;g_tf=4;g_cull_ok=false;g_view_scale=0;g_view_max=1.2;g_m1_from=0;g_first_bar=0;
+    g_psel_uid=0;g_pflag_n=0;g_pflag_store="mem69.pts";g_disk.erase("mem69.pts");g_pocc_n=0;
+    long dfri=FPDaysFromCivil(2026,11,13),dmon=dfri+3,dtue=dfri+4;
+    FPPointConfig pc;FPPDefaults(pc);
+    int lon=FindRow(pc,"London"),asia=FindRow(pc,"Asia"),nys=FindRow(pc,"New York"),fvg=FindRow(pc,"NY FPFVG AM");
+    g_test_now=SV(2026,11,17,14,0);PPMakeBars(g_test_now);g_xy_t0=SV(2026,11,17,0,0);
+
+    // ---- the sessions' names on the chart: AS, LN, NY (the table keeps the full names)
+    CHECK(pc.rows[asia].name=="Asia" && pc.rows[asia].sname=="AS" && pc.rows[lon].sname=="LN" && pc.rows[nys].sname=="NY" && pc.rows[fvg].sname=="");
+    CHECK(pc.rows[lon].hname=="LNH" && pc.rows[lon].lname=="LNL" && pc.rows[asia].hname=="ASH" && pc.rows[nys].hname=="NYH");
+    CHECK(FPPPartName(pc.rows[asia],2)=="AS CE" && FPPPartName(pc.rows[nys],7)=="NY 75%" && FPPPartName(pc.rows[fvg],3)=="NY FPFVG AM");
+    {FPPoint p=pc.rows[lon];p.hname="";p.lname="";CHECK(FPPPartName(p,0)=="LN high" && FPPPartName(p,1)=="LN low");}
+    // A 1.67 or 1.68 file still named as the defaults were takes the short names; changed names stay.
+    {FPPointConfig old=pc;old.rows[asia].sname="";old.rows[nys].sname="";old.rows[lon].sname="";old.rows[lon].hname="LSH";old.rows[lon].lname="LSL";
+     int o2=FindRow(old,"New York");old.rows[o2].hname="NYHi";
+     int ld=FindRow(old,"London Close");old.rows[ld].name="London Close";
+     WritePointsV1("v1s.points",old,0);
+     FPPointConfig r;CHECK(FPPReadFile("v1s.points",r));
+     CHECK(r.rows[asia].sname=="AS" && r.rows[lon].sname=="LN" && r.rows[lon].hname=="LNH" && r.rows[lon].lname=="LNL" && r.rows[nys].sname=="NY" && r.rows[nys].hname=="NYHi");
+     CHECK(r.rows[ld].sname=="" && r.rows[asia].name=="Asia");}
+    {FPPointConfig old=pc;old.rows[lon].sname="";old.rows[lon].hname="LSH";old.rows[lon].lname="Lo";old.rows[asia].sname="";old.rows[asia].bold=1;
+     old.taken_end=2;WritePointsV1("v2s.points",old,0,2);                                                         // as 1.68 wrote it
+     FPPointConfig r;CHECK(FPPReadFile("v2s.points",r) && r.taken_end==2 && r.rows[asia].bold==1);
+     CHECK(r.rows[lon].sname=="LN" && r.rows[lon].hname=="LNH" && r.rows[lon].lname=="Lo" && r.rows[asia].sname=="AS" && r.rows[nys].sname=="NY");}
+    {FPPointConfig c=pc;c.rows[lon].sname="LDN";c.rows[asia].sname="";CHECK(FPPWriteFile("t69.points",c));
+     FPPointConfig r;CHECK(FPPReadFile("t69.points",r) && r.rows[lon].sname=="LDN" && r.rows[asia].sname=="");}   // schema 3: kept as set, also empty
+    g_pcfg=pc;g_pcfg.days_back=3;g_pcfg.rows[lon].parts|=FPPP_CE;g_pcfg.rows[fvg].enabled=true;g_pact=g_pcfg;g_pocc_dirty=true;
+    for(int f=0;f<40;f++){g_dirty=true;Render();}
+    CHECK(LabelWith("LNH")>=0 && LabelWith("LN CE")>=0 && LabelWith("London")<0 && LabelWith("LSH")<0);
+    int l=OccOf(lon,dtue),fv=OccOf(fvg,dtue);
+    CHECK(l>=0 && fv>=0);
+
+    // ---- ray forward: to the right edge, taken or not, this line only
+    CHECK(PPPress(500,285) && g_psel_part==0);g_dirty=true;Render();g_ui_dirty=true;BuildUI();
+    CHECK(RegFind(UIS("X.RayF"))>=0 && RegFind(UIS("X.Reset"))<0);
+    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x1==785);}
+    PPChipClick("RayF");g_dirty=true;Render();
+    {int k=LineOf(l,0),k1=LineOf(l,1);CHECK(k>=0 && g_ppline[k].x1==999 && g_ppline[k].taken && k1>=0 && g_ppline[k1].x1==999);}   // (its low is untaken anyway)
+    CHECK(g_pflag_n==1 && g_pflags[0].part==0 && g_pflags[0].flags==8 && g_pflags[0].end==0);
+    PPSetFlags(g_pact.rows[lon].uid,dtue,1,1,0);g_dirty=true;Render();                                            // its low rayed back too: stored apart
+    {int k=LineOf(l,0),k1=LineOf(l,1);CHECK(g_pflag_n==2 && k>=0 && g_ppline[k].x1==999 && g_ppline[k].x0>0 && k1>=0 && g_ppline[k1].x0<0);}
+    PPSetFlags(g_pact.rows[lon].uid,dtue,1,0,0);CHECK(g_pflag_n==1 && g_pflags[0].part==0 && g_pflags[0].flags==8);
+    {MQLArr<string> lines;color accent=clrNONE;PPTip(l,0,lines,accent);std::vector<string> v(lines.v.begin(),lines.v.end());CHECK(PPHasLine(v,"Rayed forward to the right edge"));}
+    g_pact.taken_show=1;g_psel_uid=0;g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x1==999);}  // extended: shown even with taken levels hidden
+    g_pact.taken_show=0;CHECK(PPPress(500,285));g_dirty=true;Render();
+    PPChipClick("RayF");g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x1==785 && g_pflag_n==0);}
+
+    // ---- drag the selected line's right end (grip at the end): to the right, back, never before it starts
+    {int gx=0,gy0=0,gy1=0;CHECK(PPSelEnd(gx,gy0,gy1) && gx==785 && gy0==285);}
+    CHECK(!PPDragBegin(700,285) && !g_ppdrag && !PPDragBegin(785,292) && !PPDragBegin(785,278));                  // not on the grip
+    g_popup=4;CHECK(!PPDragBegin(785,285) && !g_ppdrag);g_popup=0;                                                // not while a popup is open
+    g_hidden=true;CHECK(!PPDragBegin(785,285) && !g_ppdrag);g_hidden=false;                                       // nor with the tool hidden
+    CHECK(PPDragBegin(786,287) && g_ppdrag);PPDragMove(788,287);CHECK(g_pocc[l].pend[0]==0);                       // a plain click moves nothing
+    PPDragEnd();CHECK(!g_ppdrag && g_pflag_n==0);
+    CHECK(PPDragBegin(785,285));PPDragMove(900,285);g_dirty=true;Render();
+    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x1==900 && g_pocc[l].pend[0]==SV(2026,11,17,15,0));}
+    PPDragEnd();CHECK(g_pflag_n==1 && g_pflags[0].part==0 && g_pflags[0].end==SV(2026,11,17,15,0) && g_disk.count("mem69.pts")==1);
+    g_rec=true;g_rects.clear();g_dirty=true;Render();g_rec=false;
+    {bool grip=false;for(auto& q:g_rects)if(!q.fill && q.x0==896 && q.y0==281 && q.x1==904 && q.y1==289)grip=true;CHECK(grip);}   // the grip, at its new end
+    g_pact.taken_show=1;g_psel_uid=0;g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x1==900);}  // extended: shown with taken levels hidden
+    g_pact.taken_show=0;CHECK(PPPress(500,285));g_dirty=true;Render();
+    g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("X.Reset"))>=0 && HitUI(g_pchip_x+U(266),g_pchip_y+5));
+    {MQLArr<string> lines;color accent=clrNONE;PPTip(l,0,lines,accent);std::vector<string> v(lines.v.begin(),lines.v.end());CHECK(PPHasLine(v,"Extended by hand to Tue 15:00 New York"));}
+    {int k=LineOf(l,1);CHECK(k>=0 && g_ppline[k].x1==999);}                                                       // its low: as it was
+    CHECK(PPDragBegin(900,285));PPDragMove(100,285);CHECK(g_pocc[l].pend[0]==SV(2026,11,17,5,13));                 // not before the candle it starts from
+    {long lp=27;double dp=0;string sp="";OnChartEvent(CHARTEVENT_KEYDOWN,lp,dp,sp);}                                 // Esc: back to 15:00
+    CHECK(!g_ppdrag && g_pocc[l].pend[0]==SV(2026,11,17,15,0) && g_psel_uid!=0);
+    PPLoadFlags();CHECK(g_pflag_n==1 && g_pflags[0].end==SV(2026,11,17,15,0));                                    // stored with the chart
+    g_pocc_dirty=true;g_dirty=true;Render();l=OccOf(lon,dtue);{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x1==900);}   // and kept through a rebuild
+    PPChipClick("RayF");CHECK(g_pocc[l].pend[0]==0 && (g_pocc[l].pflags[0]&8)!=0);                               // ray forward replaces the end
+    CHECK(PPPress(500,285));g_dirty=true;Render();CHECK(PPDragBegin(999,285));PPDragMove(950,285);PPDragEnd();
+    CHECK((g_pocc[l].pflags[0]&8)==0 && g_pocc[l].pend[0]==SV(2026,11,17,15,50));                                // ... and a dragged end replaces ray forward
+    PPChipClick("Reset");g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x1==785 && g_pflag_n==0);}
+    // The same with the mouse: press the grip, drag, release.
+    CHECK(PPPress(500,285));g_dirty=true;Render();
+    BeginMouse(785,285);CHECK(g_ppdrag);MoveMouse(840,285);CHECK(g_ppdrag && g_pocc[l].pend[0]==SV(2026,11,17,14,0));   // follows while dragging
+    EndMouse(845,285);CHECK(!g_ppdrag && g_pocc[l].pend[0]==SV(2026,11,17,14,5));
+    PPChipClick("Reset");
+    // A zone: the whole zone (its box and lines) extends together.
+    g_psel_uid=0;g_dirty=true;Render();
+    {int occ=-1,part=-1;CHECK(FindPPAt(660,297,occ,part) && occ==fv);}
+    CHECK(PPPress(660,297) && PPSelTarget()==3);g_dirty=true;Render();
+    {int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;int k=LineOf(fv,2);
+     CHECK(g_psel_part!=3 && b>=0 && g_ppbox[b].alpha==255 && k>=0 && g_ppline[k].sel);}                          // clicked on a line: the whole zone selected
+    PPChipClick("RayF");g_dirty=true;Render();
+    {int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;int k=LineOf(fv,2);CHECK(b>=0 && g_ppbox[b].x1==999 && k>=0 && g_ppline[k].x1==999);}
+    PPChipClick("RayF");g_dirty=true;Render();CHECK(g_pflag_n==0);
+    {int gx=0,gy0=0,gy1=0;CHECK(PPSelEnd(gx,gy0,gy1) && gx==750 && gy0==295 && gy1==300);}
+    CHECK(PPDragBegin(750,298));PPDragMove(870,298);PPDragEnd();g_dirty=true;Render();
+    {int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;CHECK(b>=0 && g_ppbox[b].x1==870);
+     int k=LineOf(fv,2);CHECK(k>=0 && g_ppline[k].x1==870);}
+    CHECK(g_pflag_n==1 && g_pflags[0].part==3);
+    g_psel_uid=0;g_pact.taken_show=1;g_dirty=true;Render();
+    {int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;CHECK(b>=0 && g_ppbox[b].x1==870);}           // extended: shown with taken levels hidden
+    g_pact.taken_show=0;CHECK(PPPress(660,297));g_dirty=true;Render();
+    PPChipClick("Hide");g_dirty=true;Render();{int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;CHECK(b<0 && LineOf(fv,2)<0);}
+    PPShowHidden(g_pact.rows[fvg].uid);CHECK(g_pflag_n==1 && g_pflags[0].flags==0 && g_pflags[0].end>0);         // shown again, still extended
+    PPSetFlags(g_pact.rows[fvg].uid,dtue,3,0,0);CHECK(g_pflag_n==0);
+    // A window's range box can be extended too.
+    {g_pact.rows[lon].parts|=FPPP_BOX;g_dirty=true;Render();
+     int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==l)b=k;CHECK(b>=0 && g_ppbox[b].x1==720);
+     PPSetFlags(g_pact.rows[lon].uid,dtue,3,8,0);g_dirty=true;Render();
+     b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==l)b=k;CHECK(b>=0 && g_ppbox[b].x1==999 && LineOf(l,0)>=0 && g_ppline[LineOf(l,0)].x1==785);
+     PPSetFlags(g_pact.rows[lon].uid,dtue,3,1,SV(2026,11,17,15,0));g_dirty=true;Render();                         // rayed back, ended by hand
+     b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==l)b=k;CHECK(b>=0 && g_ppbox[b].x1==900 && g_pp_first_x<0 && g_ppbox[b].x0==g_pp_first_x);
+     PPSetFlags(g_pact.rows[lon].uid,dtue,3,0,0);g_pact.rows[lon].parts&=~FPPP_BOX;}
+
+    // ---- flags saved by 1.67 and 1.68 (whole occurrences) still apply
+    {int f=FileOpen("old.pts",FILE_WRITE|FILE_BIN,'\t',0);
+     FileWriteInteger(f,FPP_FLAGS_MAGIC,4);FileWriteInteger(f,1,4);
+     FileWriteInteger(f,(int)g_pact.rows[lon].uid,4);FileWriteLong(f,dtue);FileWriteInteger(f,1,4);
+     FileWriteInteger(f,FPP_FLAGS_END,4);FileClose(f);
+     g_pflag_store="old.pts";PPLoadFlags();
+     CHECK(g_pflag_n==1 && g_pflags[0].part==-1 && g_pflags[0].flags==1 && g_pflags[0].end==0);
+     g_pocc_dirty=true;g_first_bar=SV(2026,11,16,0,0);g_dirty=true;Render();l=OccOf(lon,dtue);
+     CHECK(g_ppline[LineOf(l,0)].x0==-1440 && g_ppline[LineOf(l,1)].x0==-1440);                                    // the whole day rayed back, as in 1.68
+     PPSetFlags(g_pact.rows[lon].uid,dtue,-1,4,0);g_dirty=true;Render();CHECK(LineOf(l,0)<0 && LineOf(l,1)<0);       // and hidden as a whole
+     g_pflag_store="mem69.pts";PPSetFlags(g_pact.rows[lon].uid,dtue,-1,0,0);g_first_bar=0;}
+    {int f=FileOpen("bad.pts",FILE_WRITE|FILE_BIN,'\t',0);                                                         // a damaged file: not loaded
+     FileWriteInteger(f,FPP_FLAGS2_MAGIC,4);FileWriteInteger(f,1,4);
+     FileWriteInteger(f,(int)g_pact.rows[lon].uid,4);FileWriteLong(f,dtue);FileWriteInteger(f,FPP_PARTS,4);FileWriteInteger(f,1,4);FileWriteLong(f,0);
+     FileWriteInteger(f,FPP_FLAGS2_END,4);FileClose(f);
+     g_pflag_store="bad.pts";PPLoadFlags();CHECK(g_pflag_n==0);g_pflag_store="mem69.pts";PPLoadFlags();CHECK(g_pflag_n==0);}
+
+    // ---- zones: 120 days back; their ranges from M5 where the M1 history ends
+    {
+     FPZoneConfig zc;FPZoneDefaults(zc,false);zc.broker_mode=1;zc.days_back=120;
+     CHECK(FPZWriteFile("z120.zones",zc));{FPZoneConfig r;CHECK(FPZReadFile("z120.zones",r) && r.days_back==120);}
+     zc.days_back=121;CHECK(!FPZWriteFile("zbad.zones",zc));zc.days_back=120;
+     g_zact=zc;g_zact.enabled=true;ZonesBuild();
+     long td0=FPTradingDay(FPServerToNY((long)g_test_now,g_zmode,g_zgmt));long oldest=td0;
+     for(int i=0;i<g_zocc_n;i++)if(g_zocc[i].day<oldest)oldest=g_zocc[i].day;
+     CHECK(td0-oldest==119);                                                                                         // 120 days, as set
+     g_zcfg=zc;OpenZones();g_ztab=0;g_ui_dirty=true;BuildUI();
+     ObjectSetString(0,UIS("Z.Days"),OBJPROP_TEXT,"150");ZEndEdit(UIS("Z.Days"));CHECK(g_zedit.days_back==120);
+     ObjectSetString(0,UIS("Z.Days"),OBJPROP_TEXT,"90");ZEndEdit(UIS("Z.Days"));CHECK(g_zedit.days_back==90);
+     CloseZones();
+     g_m1_from=SV(2026,11,16,0,0);
+     g_zact.days_back=10;ZonesBuild();
+     int lk=FindZone(g_zact,"London"),i=-1;
+     for(int k=0;k<g_zocc_n;k++)if(g_zocc[k].zone==lk && g_zocc[k].day==(int)dfri)i=k;
+     CHECK(i>=0 && ZoneData(i,g_test_now) && g_zocc[i].state==1 && g_zocc[i].hi==1.1001);                          // Friday's London from M5
+     // ... and where it was taken, for a zone whose week after it has no M1
+     {datetime keep=g_test_now;g_test_now=SV(2026,11,26,14,0);PPMakeBars(g_test_now);g_m1_from=SV(2026,11,23,0,0);
+      g_zact.days_back=15;ZonesBuild();
+      int j=-1;for(int k=0;k<g_zocc_n;k++)if(g_zocc[k].zone==lk && g_zocc[k].day==(int)dfri)j=k;
+      CHECK(j>=0 && ZoneData(j,g_test_now) && g_zocc[j].hi==1.1001);
+      ZoneExtend(j,g_test_now);CHECK(g_zocc[j].hi_taken==SV(2026,11,16,10,20) && g_zocc[j].lo_taken==SV(2026,11,15,18,0));
+      g_test_now=keep;PPMakeBars(g_test_now);}
+     g_m1_from=0;g_zact.enabled=false;
+    }
+    g_count=0;g_selected=-1;g_zact.enabled=true;g_zcfg.enabled=true;g_first_bar=0;g_m1_from=0;g_psel_uid=0;
    }
 
    std::printf(fails?"%d FAILED\n":"all tests passed\n",fails);

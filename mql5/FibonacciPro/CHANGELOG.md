@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.68 | `Fibonacci_Pro_14.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.67 with price point ray back to the chart's history, taken lines to the end of their day or week, quadrants and octants, bold labels and 120 days back. The calibration script is unchanged (1.66). |
+| 1.69 | `Fibonacci_Pro_15.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.68 with price points rayed forward, ends dragged by hand, buttons that act on one line, AS/LN/NY session names, and zones 120 days back. The calibration script is unchanged (1.66). |
+| 1.68 | `Fibonacci_Pro_14.mq5` | Kept unchanged. Commit `20a63e4`. 1.67 with price point ray back to the chart's history, taken lines to the end of their day or week, quadrants and octants, bold labels and 120 days back. |
 | 1.67 | `Fibonacci_Pro_13.mq5` | Kept unchanged. Commit `491af21`. 1.66 with ICT price points and numbered drawing names. |
 | 1.66 | `Fibonacci_Pro_12.mq5` | Kept unchanged. Commit `f3625ea`. 1.65 with a lot size & risk crosshair, and a calibration script for it. |
 | 1.65 | `Fibonacci_Pro_11.mq5` | Kept unchanged. Commit `b9395f4`. Drawings typed automatically (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR), coloured by timeframe. |
@@ -26,6 +27,42 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - 1.66 keeps its risk settings in separate files, so 1.65 opens everything 1.66 saves.
 - 1.67 keeps price point settings in separate files, so 1.66 opens everything 1.67 saves.
 - Price point settings saved by 1.68 can't be read by 1.67 (details under 1.68).
+- Price point settings saved by 1.69, and the price points it rays, hides or extends on a chart, can't be read by 1.68 or 1.67 (details under 1.69).
+- Zone settings and zone presets with more than 60 days back can't be read by 1.68 or older.
+
+## 1.69
+
+**Ray forward.** A selected price point now has two ray buttons:
+- **◀ Ray** rays it back to the chart's first candle (the 1.68 **Ray back**).
+- **Ray ▶** rays it forward to the right edge of the chart.
+
+A line rayed forward runs to the right edge even after price takes it. It keeps its taken look (dimmed), and stays drawn when taken levels are set to hide. Both rays apply to this chart only; click the button again to undo.
+
+**Drag a price point's end.** When a level is selected, a small square (the grip) appears at its right end. Drag the grip right to extend the line, or left to shorten it.
+- It can't go before the candle the level starts from.
+- Esc while dragging puts it back. A click without moving changes nothing.
+- A dragged end replaces Ray ▶, and Ray ▶ replaces a dragged end.
+- Once an end was dragged, the buttons add **Reset end**, which undoes it.
+- It is stored for this chart only, like a ray, and kept when the levels are rebuilt (a new day, a settings change, another timeframe).
+- The hover info shows it: "Extended by hand to Tue 15:00 New York".
+
+**The buttons act on the line you clicked.** In 1.67 and 1.68, Ray back and Hide acted on every line of that row's day (its high and its low together). Now **◀ Ray**, **Ray ▶**, **Hide** and the dragged end act on the one line you selected:
+- A gap, FPFVG or FPOB acts as one: its zone and all its lines together.
+- A session's range box (when its row draws it) is a part of its own, separate from its high and low lines: click its left or right side to select it.
+- Rays and hides saved by 1.67 or 1.68 still apply, to the whole day as before.
+- **Show them again**, in a row's ... options, shows its hidden lines and keeps their rays and ends.
+
+**Session names AS, LN and NY.** On the chart, the Asia, London and New York rows are named AS, LN and NY: their lines are ASH/ASL, LNH/LNL (1.68: LSH/LSL) and NYH/NYL, and labels and hover info read "LN CE", "NY 25%" and so on.
+- The table keeps the full names.
+- Any row can have its own name on the chart: in its ... options, **On the chart** (up to 16 characters). Left empty, the chart uses the row's name.
+- Settings saved by 1.67 or 1.68 take the short names for the three session rows that still have their default names; London's LSH and LSL become LNH and LNL. Names you changed are kept.
+
+**Zones look back up to 120 days** (was 60): Zones window → **Days back**. As in price points, older days read M5 candles where the terminal's M1 history ends (MT5's "Max bars in chart"), both for a zone's range and for where price took it.
+
+**Files:**
+- **Price point settings** are schema 3, which adds the name on the chart. 1.69 reads the files 1.67 and 1.68 saved. 1.67 and 1.68 can't read the ones 1.69 saves; they fall back to their backup or their defaults.
+- **Rays, hides and ends on a chart** are stored per line, with the dragged end. 1.69 reads the file 1.67 and 1.68 wrote. 1.67 and 1.68 can't read the one 1.69 writes, so on that chart they draw every level as its row is set. If you then ray or hide a level in them, they rewrite the file in their own layout, replacing what 1.69 stored; 1.69 reads that file (as whole days).
+- **Zone settings and presets** with more than 60 days back can't be read by 1.68 or older: the settings fall back to their backup or their defaults, and such a preset is reported as invalid. With 60 or fewer, the files are the same as before.
 
 ## 1.68
 
