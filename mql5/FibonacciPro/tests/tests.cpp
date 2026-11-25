@@ -1582,7 +1582,9 @@ int main()
     {int k=LineOf(l,7);CHECK(k>=0 && g_pocc[l].tk[7]==SV(2026,11,17,12,30) && g_ppline[k].x1==750 && g_ppline[k].alpha==200*90/255);}
     {int k=LineOf(l,8);CHECK(k>=0 && g_pocc[l].tk[8]==0 && g_ppline[k].x1==999 && g_ppline[k].alpha==150);}
     CHECK(g_pocc[l].tk[10]==SV(2026,11,17,12,30) && g_pocc[l].tk[11]==SV(2026,11,17,12,30) && g_pocc[l].tk[9]==0);
-    CHECK(LineOf(ny,6)<0 && LineOf(ny,0)>=0);                                                                     // a live window: not until it ends
+    g_width=2000;g_dirty=true;Render();                                                                           // wide enough to show 17:00, still to come
+    CHECK(LineOf(ny,6)<0 && LineOf(ny,0)>=0);                                                                     // a live window: its quadrants not until it ends
+    g_width=1000;g_dirty=true;Render();
     CHECK(LineOf(fv,8)>=0 && std::fabs(FPPLevel(g_pocc[fv],8)-(1.1001+0.0017*0.125))<1e-12);                        // an FVG's octants
     CHECK(LabelWith("25%")>=0 && LabelWith("87.5%")>=0 && LabelWith("London 25%")<0);                              // short labels: the hover names them
     {int occ=-1,part=-1;CHECK(FindPPAt(800,308,occ,part) && occ==l && part==6);
