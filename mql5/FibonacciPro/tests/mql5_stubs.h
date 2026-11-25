@@ -55,6 +55,7 @@ const int FILE_READ=1,FILE_WRITE=2,FILE_BIN=4,FILE_UNICODE=8,FILE_SHARE_READ=16,
 const int TIME_DATE=1,TIME_MINUTES=2,TIME_SECONDS=4;
 enum ENUM_FILE_PROPERTY_INTEGER{FILE_MODIFY_DATE};
 const color clrNONE=-1;
+const uint FW_NORMAL=400,FW_BOLD=700;
 extern string _Symbol;extern int _Digits;extern double _Point;extern int _Period;
 
 struct MqlRates{datetime time;double open,high,low,close;long tick_volume;int spread;long real_volume;};
@@ -103,7 +104,7 @@ bool OrderCalcProfit(ENUM_ORDER_TYPE action,const string& sym,double volume,doub
 int MessageBox(const string& text,const string& caption="",int flags=0);
 int PeriodSeconds(ENUM_TIMEFRAMES tf=PERIOD_CURRENT);
 int iBarShift(const string& sym,ENUM_TIMEFRAMES tf,datetime t,bool exact=false);
-datetime iTime(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iOpen(const string& sym,ENUM_TIMEFRAMES tf,int shift);
+int iBars(const string& sym,ENUM_TIMEFRAMES tf);datetime iTime(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iOpen(const string& sym,ENUM_TIMEFRAMES tf,int shift);
 double iHigh(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iLow(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iClose(const string& sym,ENUM_TIMEFRAMES tf,int shift);
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,int start,int count,MQLArr<MqlRates>& rates);
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,datetime from,datetime to,MQLArr<MqlRates>& rates);

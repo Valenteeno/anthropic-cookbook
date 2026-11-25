@@ -16,7 +16,10 @@ void CCanvas::PixelSet(int,int,uint){}void CCanvas::Rectangle(int,int,int,int,ui
 #ifndef TEST_OWN_CANVAS
 void CCanvas::FillRectangle(int,int,int,int,uint){}
 #endif
-void CCanvas::Line(int,int,int,int,uint){}bool CCanvas::FontSet(const string&,int,uint,uint){return true;}
+void CCanvas::Line(int,int,int,int,uint){}
+#ifndef TEST_OWN_FONT
+bool CCanvas::FontSet(const string&,int,uint,uint){return true;}
+#endif
 int CCanvas::TextWidth(const string& t){return (int)t.size()*6;}int CCanvas::TextHeight(const string&){return 14;}void CCanvas::TextOut(int,int,const string&,uint,uint){}
 double ChartGetDouble(long,ENUM_CHART_PROPERTY_DOUBLE,int){return 0;}long ChartGetInteger(long,ENUM_CHART_PROPERTY_INTEGER,int){return 0;}
 long ChartID(){return 1;}bool ChartIndicatorDelete(long,int,const string&){return true;}bool ChartNavigate(long,ENUM_CHART_POSITION,int){return true;}
@@ -57,7 +60,10 @@ string StringSubstr(const string& s,int st,int len){if(st<0 || st>=(int)s.size()
 double StringToDouble(const string& s){return std::atof(s.c_str());}long StringToInteger(const string& s){return std::atol(s.c_str());}
 datetime StringToTime(const string&){return 0;}bool StringToUpper(string& s){for(auto& c:s)c=(char)toupper(c);return true;}
 long TerminalInfoInteger(ENUM_TERMINAL_INFO_INTEGER){return 0;}string TimeToString(datetime t,int){return std::to_string(t);}
-int iBarShift(const string&,ENUM_TIMEFRAMES,datetime,bool){return -1;}datetime iTime(const string&,ENUM_TIMEFRAMES,int){return 0;}
+int iBarShift(const string&,ENUM_TIMEFRAMES,datetime,bool){return -1;}
+#ifndef TEST_OWN_BARS
+int iBars(const string&,ENUM_TIMEFRAMES){return 0;}datetime iTime(const string&,ENUM_TIMEFRAMES,int){return 0;}
+#endif
 double iOpen(const string&,ENUM_TIMEFRAMES,int){return 0;}double iHigh(const string&,ENUM_TIMEFRAMES,int){return 0;}
 double iLow(const string&,ENUM_TIMEFRAMES,int){return 0;}double iClose(const string&,ENUM_TIMEFRAMES,int){return 0;}
 #ifndef TEST_OWN_TIME

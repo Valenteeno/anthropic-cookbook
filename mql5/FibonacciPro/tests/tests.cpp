@@ -1,4 +1,4 @@
-// Behavioural tests for Fibonacci_Pro_13.mq5 (1.67), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_14.mq5 (1.68), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
@@ -8,6 +8,8 @@
 #define TEST_OWN_CANVAS
 #define TEST_OWN_XYTP
 #define TEST_OWN_MARKET
+#define TEST_OWN_BARS
+#define TEST_OWN_FONT
 #include "fp5.cpp"
 #include <cstdio>
 #include <cstring>
@@ -23,6 +25,9 @@ string _Symbol="EURUSD";int _Digits=5;double _Point=0.00001;int _Period=PERIOD_H
 struct RecRect{int x0,y0,x1,y1;uint c;bool fill;};static std::vector<RecRect> g_rects;static bool g_rec=false;
 void CCanvas::FillRectangle(int x1,int y1,int x2,int y2,uint c)
   {if(g_rec && (this==&g_line_canvas || this==&g_fill_canvas))g_rects.push_back({x1,y1,x2,y2,c,this==&g_fill_canvas});}
+// Fonts set on the line canvas: how many were bold.
+static int g_bold_sets=0;
+bool CCanvas::FontSet(const string&,int,uint flags,uint){if(flags==FW_BOLD)g_bold_sets++;return true;}
 static int RowPieces(int y,int xa,int xb){int n=0;for(auto& r:g_rects)if(!r.fill && r.y0==y && r.y1==y && r.x1>=xa && r.x0<=xb)n++;return n;}
 // Colour left on the shading canvas at (x,y): the last recorded fill there wins, as on a canvas.
 static uint FillAt(int x,int y){uint c=0;for(auto& r:g_rects)if(r.fill && r.x0<=x && x<=r.x1 && r.y0<=y && y<=r.y1)c=r.c;return c;}
@@ -41,13 +46,16 @@ static long g_xy_t0=0;
 bool ChartTimePriceToXY(long,int,datetime t,double p,int& x,int& y){x=(int)((t-g_xy_t0)/60);y=(int)std::lround((1.2-p)*3000);return true;}
 bool ChartXYToTimePrice(long,int x,int y,int& s,datetime& t,double& p){s=0;t=(datetime)(g_xy_t0+60L*x);p=1.2-y/3000.0;return true;}
 static std::vector<MqlRates> g_bars;
-// M1 bars as given; H1 requests get them grouped into hours (as the terminal builds them).
-static long TfSec(ENUM_TIMEFRAMES tf){return tf==PERIOD_H1?3600:60;}
+// M1 bars as given; M5 and H1 requests get them grouped (as the terminal builds them).
+// M1 history can be cut off (g_m1_from), as a terminal's "Max bars in chart" does.
+static datetime g_m1_from=0;
+static long TfSec(ENUM_TIMEFRAMES tf){return tf==PERIOD_H1?3600:(tf==PERIOD_M5?300:60);}
 int CopyRates(const string&,ENUM_TIMEFRAMES tf,datetime from,datetime to,MQLArr<MqlRates>& r)
   {
    r.v.clear();long sec=TfSec(tf);
    for(auto& b:g_bars)
      {
+      if(tf==PERIOD_M1 && b.time<g_m1_from)continue;
       long bt=(b.time/sec)*sec;
       if(bt<from || bt>to)continue;
       if(!r.v.empty() && r.v.back().time==bt){MqlRates& a=r.v.back();a.high=std::max(a.high,b.high);a.low=std::min(a.low,b.low);a.close=b.close;}
@@ -64,6 +72,10 @@ int CopyRates(const string& s,ENUM_TIMEFRAMES tf,datetime start,int count,MQLArr
    return (int)r.v.size();
   }
 static long NY(int y,int m,int d,int hh,int mm){return FPDaysFromCivil(y,m,d)*86400+hh*3600+mm*60;}
+// The chart's oldest candle (0: none known): rayed price points reach back to it.
+static datetime g_first_bar=0;
+int iBars(const string&,ENUM_TIMEFRAMES){return g_first_bar>0?1000:0;}
+datetime iTime(const string&,ENUM_TIMEFRAMES,int shift){return (g_first_bar>0 && shift==999)?g_first_bar:0;}
 static int FindZone(FPZoneConfig& c,const string& name){for(int i=0;i<c.count;i++)if(c.zones[i].name==name)return i;return -1;}
 static int MarkOfZone(int z){for(int k=0;k<g_zmark_n;k++)if(g_zocc[g_zvis[g_zmark[k].vis].occ].zone==z)return k;return -1;}
 static void MakeFib(FPSetup &s,const int uid,const string name,const bool hline,const ENUM_TIMEFRAMES tf)
@@ -132,6 +144,30 @@ static void PPMakeBars(datetime to)
    PPSetBar(2026,11,17,13,41,1.1000,1.1006,1.0999,1.1005);  // ... and a close above the swing: the break
   }
 static void PPScanAll(datetime now){for(int pass=0;pass<20;pass++)for(int i=0;i<g_pocc_n;i++)PPScan(g_pocc[i],g_pact.rows[g_pocc[i].row].kind,now);}
+
+// A price points file as 1.67 wrote it (schema 1), with extra settings flags.
+static void WritePointsV1(const string& name,FPPointConfig& c,int extra_flags)
+  {
+   int f=FileOpen(name,FILE_WRITE|FILE_BIN,'\t',0);
+   FileWriteInteger(f,FPP_MAGIC,4);FileWriteInteger(f,1,4);
+   int flags=(c.enabled?1:0)|(c.end_taken?2:0)|(c.merge?4:0)|(c.pin_left?8:0)|(c.offscreen?16:0)|(c.hover?32:0)|(c.fill?64:0)
+             |(c.range_fill?128:0)|(c.alert_sound?256:0)|(c.alert_push?512:0)|extra_flags;
+   FileWriteInteger(f,flags,4);
+   for(int g=0;g<FPP_GROUPS;g++)FileWriteInteger(f,(c.group_on[g]?1:0)|(c.group_tf[g]<<1),4);
+   FileWriteInteger(f,c.days_back,4);FileWriteInteger(f,c.weeks_back,4);FileWriteInteger(f,c.months_back,4);
+   FileWriteInteger(f,c.taken_show,4);FileWriteInteger(f,c.week_open,4);FileWriteInteger(f,c.label_mode,4);FileWriteInteger(f,c.label_size,4);
+   FileWriteInteger(f,c.opacity,4);FileWriteInteger(f,c.tint,4);
+   FileWriteInteger(f,c.count,4);
+   for(int i=0;i<c.count;i++)
+     {
+      WText(f,c.rows[i].name);WText(f,c.rows[i].hname);WText(f,c.rows[i].lname);
+      int v[]={c.rows[i].kind,c.rows[i].sub,c.rows[i].group,c.rows[i].start,c.rows[i].end,c.rows[i].len,c.rows[i].swing,c.rows[i].look,c.rows[i].parts,
+               c.rows[i].style,c.rows[i].width,(int)c.rows[i].ink,c.rows[i].label,c.rows[i].ends,c.rows[i].sample,(int)c.rows[i].uid};
+      for(int x:v)FileWriteInteger(f,x,4);
+      FileWriteInteger(f,(c.rows[i].enabled?1:0)|(c.rows[i].ray?2:0)|(c.rows[i].alert?4:0),4);
+     }
+   FileWriteInteger(f,FPP_END,4);FileClose(f);
+  }
 
 int main()
   {
@@ -1307,8 +1343,9 @@ int main()
      CHECK(clear);}
     g_pact.merge=true;g_pact.rows[lon].ends=0;
     // Ray back (row default) and names pinned at the left edge.
+    g_first_bar=SV(2026,11,16,0,0);                                                                                 // the chart's oldest candle: Monday 00:00
     g_pact.rows[lon].ray=true;g_pact.pin_left=true;g_dirty=true;Render();
-    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0==0);int p=-1;for(int q=0;q<g_pplabel_n;q++)if(g_pplabel[q].w>0 && g_pplabel[q].x==4 && g_pplabel[q].text=="LSH")p=q;CHECK(p>=0);}
+    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0==-1440);int p=-1;for(int q=0;q<g_pplabel_n;q++)if(g_pplabel[q].w>0 && g_pplabel[q].x==4 && g_pplabel[q].text=="LSH")p=q;CHECK(p>=0);}
     g_pact.rows[lon].ray=false;g_pact.pin_left=false;
     // Below the visible prices: an arrow at the edge, unless switched off.
     g_height=280;g_dirty=true;Render();
@@ -1334,7 +1371,7 @@ int main()
     g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("X.Ray"))>=0 && RegFind(UIS("X.Hide"))>=0 && RegFind(UIS("X.Row"))>=0 && HitUI(g_pchip_x+5,g_pchip_y+5));
     {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].sel && g_ppline[k].width==2 && g_ppline[k].alpha==255);}      // selected: thicker, full strength
     PPChipClick("Ray");g_dirty=true;Render();
-    CHECK(g_pflag_n==1 && g_pflags[0].flags==1 && g_disk.count("mem.pts")==1 && g_ppline[LineOf(l,0)].x0==0 && g_ppline[LineOf(l,1)].x0==0);
+    CHECK(g_pflag_n==1 && g_pflags[0].flags==1 && g_disk.count("mem.pts")==1 && g_ppline[LineOf(l,0)].x0==-1440 && g_ppline[LineOf(l,1)].x0==-1440);
     CHECK(LineOf(OccOf(lon,dmon),0)>=0 && g_ppline[LineOf(OccOf(lon,dmon),0)].x0<0);                               // only that day's London
     PPChipClick("Ray");g_dirty=true;Render();CHECK(g_pflag_n==0 && g_ppline[LineOf(l,0)].x0==312);
     g_pact.rows[lon].ray=true;PPChipClick("Ray");CHECK(g_pflag_n==1 && g_pflags[0].flags==2);g_dirty=true;Render();  // the row rays; this day not
@@ -1364,7 +1401,8 @@ int main()
      g_test_now=SV(2026,11,17,13,59)+20;PPMakeBars(g_test_now);for(int k=0;k<5;k++)PPScanAlert(i,g_test_now);
      CHECK(g_pocc[i].scan_to==SV(2026,11,17,13,59) && g_sounds==s0+1);                                              // up to date (the forming candle is read again)
      g_test_now=SV(2026,11,17,14,0)+20;PPMakeBars(g_test_now);PPSetBar(2026,11,17,14,0,1.1,1.1001,1.0960,1.0965);
-     CHECK(!PPTail(g_test_now) && g_pocc[i].tk[1]==0);                                                              // the forming candle, not low enough yet
+     PPTail(g_test_now);CHECK(g_pocc[i].tk[1]==0 && g_sounds==s0+1);                                               // the forming candle, not low enough yet
+     CHECK(g_pocc[i].tk[6]==SV(2026,11,17,14,0));                                                                   // (it reached London's 25%, not shown: no alert)
      g_test_now+=20;PPSetBar(2026,11,17,14,0,1.1,1.1001,1.0940,1.0945);
      CHECK(PPTail(g_test_now) && g_pocc[i].tk[1]==SV(2026,11,17,14,0) && g_sounds==s0+2 && g_pushes==p0+2);        // it grows and takes London's low
      CHECK(!PPTail(g_test_now) && g_sounds==s0+2);
@@ -1396,7 +1434,7 @@ int main()
     ObjectSetString(0,UIS("N.End19"),OBJPROP_TEXT,"14:00");PEndEdit(UIS("N.End19"));CHECK(g_pedit.rows[18].len==45);  // over 4 hours: refused
     g_ui_dirty=true;BuildUI();
     PointsClick("Tab0");g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("N.Days"))>=0 && RegFind(UIS("N.Week0"))>=0);
-    ObjectSetString(0,UIS("N.Days"),OBJPROP_TEXT,"90");PEndEdit(UIS("N.Days"));CHECK(g_pedit.days_back==60);
+    ObjectSetString(0,UIS("N.Days"),OBJPROP_TEXT,"90");PEndEdit(UIS("N.Days"));CHECK(g_pedit.days_back==90);
     g_edit_error=false;ObjectSetString(0,UIS("N.Weeks"),OBJPROP_TEXT,"x");PEndEdit(UIS("N.Weeks"));CHECK(g_pedit.weeks_back==4 && g_edit_error);
     g_ui_dirty=true;BuildUI();
     PointsClick("EndTaken");CHECK(!g_pedit.end_taken && !g_pact.end_taken);PointsClick("EndTaken");
@@ -1413,7 +1451,7 @@ int main()
     // Dropdowns and colour of a row (London is on page 4).
     PointsClick("Tab3");g_ppage=3;g_ui_dirty=true;BuildUI();
     PointsClick("Style26");CHECK(g_popup==20 && g_popup_items==6);DropdownChoice(2);ClosePopup();CHECK(g_pedit.rows[25].style==1);
-    PointsClick("Ends26");CHECK(g_popup==23 && g_popup_items==3);DropdownChoice(2);ClosePopup();CHECK(g_pedit.rows[25].ends==2);
+    PointsClick("Ends26");CHECK(g_popup==23 && g_popup_items==5);DropdownChoice(4);ClosePopup();CHECK(g_pedit.rows[25].ends==2);
     PointsClick("Label26");CHECK(g_popup==22);DropdownChoice(3);ClosePopup();CHECK(g_pedit.rows[25].label==3);
     PointsClick("Width26");CHECK(g_popup==21);DropdownChoice(2);ClosePopup();CHECK(g_pedit.rows[25].width==3);
     PointsClick("Color26");CHECK(g_popup==3 && g_picker_target==-2025);PickApply(clrGold);
@@ -1511,6 +1549,159 @@ int main()
     DuplicateSelected();CHECK(g_count==8 && g_sets[7].name=="H1 FVG 8 "+Glyph(0x25B2));
     g_selected=5;DuplicateSelected();CHECK(g_count==9 && g_sets[8].name.find("H1 FVG london copy")==0);
     g_count=0;g_selected=-1;g_zact.enabled=true;g_zcfg.enabled=true;
+   }
+
+   // ==== 1.68: ray back to the chart's first candle, taken lines to the end of their day or
+   // week, quadrants and octants, bold labels, 120 days back (M5 where the M1 history ends)
+   {
+    g_zact.enabled=false;g_zact.broker_mode=1;g_zact.broker_gmt=2;ZoneResolveBroker();
+    g_owner=true;g_hidden=false;g_editor=false;g_zeditor=false;g_reditor=false;g_peditor=false;g_list=false;g_popup=0;g_count=0;g_selected=-1;
+    g_width=1000;g_height=600;g_tf=4;g_cull_ok=false;g_view_scale=0;g_view_max=1.2;g_m1_from=0;g_first_bar=0;
+    g_psel_uid=0;g_pflag_n=0;g_pflag_store="mem68.pts";g_disk.erase("mem68.pts");
+    g_pocc_n=0;                                                                                                    // nothing kept from the 1.67 tests' candles
+    long dfri=FPDaysFromCivil(2026,11,13),dmon=dfri+3,dtue=dfri+4;
+    FPPointConfig pc;FPPDefaults(pc);
+    int lon=FindRow(pc,"London"),asia=FindRow(pc,"Asia"),nys=FindRow(pc,"New York"),fvg=FindRow(pc,"NY FPFVG AM"),org=FindRow(pc,"ORG"),day=FindRow(pc,"Day");
+    g_test_now=SV(2026,11,17,14,0);PPMakeBars(g_test_now);g_xy_t0=SV(2026,11,17,0,0);
+
+    // ---- quadrants and octants: one switch each, for every kind with a range
+    CHECK((FPPAllowed(FPPK_WINDOW)&(FPPP_Q|FPPP_E))==(FPPP_Q|FPPP_E) && (FPPAllowed(FPPK_GAP)&FPPP_Q)!=0 && (FPPAllowed(FPPK_FVG)&FPPP_E)!=0
+          && (FPPAllowed(FPPK_OB)&FPPP_Q)!=0 && (FPPAllowed(FPPK_PERIOD)&(FPPP_Q|FPPP_E))==(FPPP_Q|FPPP_E) && (FPPAllowed(FPPK_OPEN)&(FPPP_Q|FPPP_E))==0);
+    CHECK(FPPBitOf(6)==FPPP_Q && FPPBitOf(7)==FPPP_Q && FPPBitOf(8)==FPPP_E && FPPBitOf(11)==FPPP_E && FPPBitOf(2)==FPPP_CE && FPPBitOf(5)==FPPP_C);
+    CHECK(FPPPartName(pc.rows[lon],6)=="London 25%" && FPPPartName(pc.rows[lon],7)=="London 75%" && FPPPartName(pc.rows[lon],8)=="London 12.5%" && FPPPartName(pc.rows[lon],11)=="London 87.5%");
+    CHECK((FPPTakeable(FPPK_WINDOW)&(1<<3))==0 && (FPPTakeable(FPPK_WINDOW)&(1<<11))!=0 && FPPTakeable(FPPK_OPEN)==(1<<4));
+    g_pcfg=pc;g_pcfg.days_back=3;g_pcfg.rows[lon].parts|=FPPP_Q|FPPP_E;g_pcfg.rows[nys].parts|=FPPP_Q;g_pcfg.rows[fvg].enabled=true;g_pcfg.rows[fvg].parts|=FPPP_E;
+    g_pact=g_pcfg;g_pocc_dirty=true;
+    for(int f=0;f<40;f++){g_dirty=true;Render();}
+    int l=OccOf(lon,dtue),ny=OccOf(nys,dtue),fv=OccOf(fvg,dtue);
+    CHECK(l>=0 && ny>=0 && fv>=0);
+    CHECK(std::fabs(FPPLevel(g_pocc[l],6)-1.0975)<1e-12 && std::fabs(FPPLevel(g_pocc[l],7)-1.1025)<1e-12 && std::fabs(FPPLevel(g_pocc[l],8)-1.09625)<1e-12
+          && std::fabs(FPPLevel(g_pocc[l],9)-1.09875)<1e-12 && std::fabs(FPPLevel(g_pocc[l],10)-1.10125)<1e-12 && std::fabs(FPPLevel(g_pocc[l],11)-1.10375)<1e-12);
+    // From the window's end; taken where price reaches them; quadrants lighter, octants lighter still; dotted.
+    {int k=LineOf(l,6);CHECK(k>=0 && g_ppline[k].x0==720 && g_ppline[k].x1==999 && g_ppline[k].y==308 && g_ppline[k].style==STYLE_DOT && g_ppline[k].alpha==200 && g_pocc[l].tk[6]==0);}
+    {int k=LineOf(l,7);CHECK(k>=0 && g_pocc[l].tk[7]==SV(2026,11,17,12,30) && g_ppline[k].x1==750 && g_ppline[k].alpha==200*90/255);}
+    {int k=LineOf(l,8);CHECK(k>=0 && g_pocc[l].tk[8]==0 && g_ppline[k].x1==999 && g_ppline[k].alpha==150);}
+    CHECK(g_pocc[l].tk[10]==SV(2026,11,17,12,30) && g_pocc[l].tk[11]==SV(2026,11,17,12,30) && g_pocc[l].tk[9]==0);
+    CHECK(LineOf(ny,6)<0 && LineOf(ny,0)>=0);                                                                     // a live window: not until it ends
+    CHECK(LineOf(fv,8)>=0 && std::fabs(FPPLevel(g_pocc[fv],8)-(1.1001+0.0017*0.125))<1e-12);                        // an FVG's octants
+    CHECK(LabelWith("25%")>=0 && LabelWith("87.5%")>=0 && LabelWith("London 25%")<0);                              // short labels: the hover names them
+    {int occ=-1,part=-1;CHECK(FindPPAt(800,308,occ,part) && occ==l && part==6);
+     MQLArr<string> lines;color accent=clrNONE;PPTip(occ,part,lines,accent);std::vector<string> v(lines.v.begin(),lines.v.end());
+     CHECK(lines[0]=="London 25%" && PPHasLine(v,"Price\t1.09750") && PPHasLine(v,"Status\tNot taken yet"));}
+    g_pact.label_mode=2;g_dirty=true;Render();CHECK(LabelWith("25% 1.09750")>=0);g_pact.label_mode=0;
+
+    // ---- taken lines run to the take, or to the end of that trading day or week
+    CHECK(FPPTakenEnd(SV(2026,11,16,10,23),0)==SV(2026,11,16,10,23));
+    CHECK(FPPTakenEnd(SV(2026,11,16,10,23),1)==SV(2026,11,16,17,0) && FPPTakenEnd(SV(2026,11,16,18,30),1)==SV(2026,11,17,17,0));   // the evening: the next trading day
+    CHECK(FPPTakenEnd(SV(2026,11,16,10,23),2)==SV(2026,11,20,17,0) && FPPTakenEnd(SV(2026,11,15,18,5),2)==SV(2026,11,20,17,0));    // Sunday's open: that week
+    g_xy_t0=SV(2026,11,16,0,0);g_width=2000;g_dirty=true;Render();
+    int am=OccOf(asia,dmon);
+    CHECK(am>=0 && g_pocc[am].tk[0]==SV(2026,11,16,10,23));                                                      // Monday's Asia high: taken Monday 10:23
+    {int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==623);}
+    g_pact.taken_end=1;g_dirty=true;Render();{int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==1020 && g_ppline[k].alpha==90);}   // to Monday 17:00, still faint
+    g_pact.taken_end=2;g_dirty=true;Render();{int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==1999);}                         // Friday 17:00 is still to come
+    g_pact.taken_end=0;g_pact.rows[asia].ends=3;g_dirty=true;Render();{int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==1020);} // per row: the end of that day
+    g_pact.end_taken=false;g_dirty=true;Render();{int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==1020);}                     // ... whatever Parameters say
+    g_pact.rows[asia].ends=4;g_dirty=true;Render();{int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==1999);}
+    g_pact.end_taken=true;g_pact.taken_end=1;g_pact.rows[asia].ends=1;g_dirty=true;Render();{int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==623);}  // per row: at the take
+    g_pact.rows[asia].ends=2;g_dirty=true;Render();{int k=LineOf(am,0);CHECK(k>=0 && g_ppline[k].x1==1999 && g_ppline[k].alpha==255);}          // per row: run on
+    g_pact.rows[asia].ends=0;g_pact.taken_end=0;
+    // A zone filled earlier today, the day now over: it reaches 17:00.
+    g_test_now=SV(2026,11,17,18,30);PPMakeBars(g_test_now);g_xy_t0=SV(2026,11,17,0,0);g_width=1000;g_pocc_dirty=true;
+    for(int f=0;f<10;f++){g_dirty=true;Render();}
+    fv=OccOf(fvg,dtue);
+    {int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;CHECK(b>=0 && g_ppbox[b].x1==750);}
+    g_pact.taken_end=1;g_dirty=true;Render();{int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;CHECK(b>=0 && g_ppbox[b].x1==1020);}
+    g_pact.taken_end=2;g_dirty=true;Render();{int b=-1;for(int k=0;k<g_ppbox_n;k++)if(g_ppbox[k].occ==fv)b=k;CHECK(b>=0 && g_ppbox[b].x1==999);}
+    g_pact.taken_end=0;g_test_now=SV(2026,11,17,14,0);PPMakeBars(g_test_now);g_pocc_dirty=true;for(int f=0;f<10;f++){g_dirty=true;Render();}
+    l=OccOf(lon,dtue);
+
+    // ---- ray back: to the chart's first candle, and still drawn while the view is before the level
+    g_first_bar=SV(2026,11,13,9,0);g_pact.rows[lon].ray=true;g_dirty=true;Render();
+    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0==(int)((SV(2026,11,13,9,0)-g_xy_t0)/60));}
+    g_cull_ok=true;g_xy_t0=SV(2026,11,16,0,0);g_vt0=SV(2026,11,16,0,0);g_vt1=SV(2026,11,16,16,0);g_dirty=true;Render();
+    {int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0<0 && g_ppline[k].x1>=g_width-1);}                           // Monday on screen, Tuesday's London high across it
+    g_pact.rows[lon].ray=false;g_dirty=true;Render();CHECK(LineOf(l,0)<0);                                        // not rayed: it starts later, off screen
+    g_pact.rows[lon].ray=true;g_first_bar=SV(2026,11,16,2,0);g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0==120);}  // history starts on screen
+    g_first_bar=0;g_dirty=true;Render();{int k=LineOf(l,0);CHECK(k>=0 && g_ppline[k].x0<=-1000000);}            // history unknown: as far as it goes
+    g_cull_ok=false;g_pact.rows[lon].ray=false;g_xy_t0=SV(2026,11,17,0,0);
+
+    // ---- bold labels: for every row, or per row
+    {g_dirty=true;Render();int k=LabelWith("LSH");CHECK(k>=0 && !g_pplabel[k].bold);
+     int b0=g_bold_sets;g_pact.label_bold=true;g_dirty=true;Render();k=LabelWith("LSH");CHECK(k>=0 && g_pplabel[k].bold && g_bold_sets>b0);
+     g_pact.rows[lon].bold=2;g_dirty=true;Render();k=LabelWith("LSH");int a2=LabelWith("ASH");CHECK(k>=0 && !g_pplabel[k].bold && a2>=0 && g_pplabel[a2].bold);  // this row regular
+     g_pact.label_bold=false;g_pact.rows[lon].bold=1;g_dirty=true;Render();k=LabelWith("LSH");a2=LabelWith("ASH");CHECK(k>=0 && g_pplabel[k].bold && a2>=0 && !g_pplabel[a2].bold);
+     g_pact.rows[lon].bold=0;b0=g_bold_sets;g_dirty=true;Render();CHECK(g_bold_sets==b0);}                         // none bold: the bold font is never set
+
+    // ---- alerts for a quadrant the row shows
+    {
+     int s0=g_sounds;
+     g_pact=pc;g_pact.days_back=3;g_pact.rows[lon].parts|=FPPP_Q;g_pact.rows[lon].alert=true;g_pact.alert_sound=true;
+     g_test_now=SV(2026,11,17,12,30)+30;PPMakeBars(g_test_now);PPBuild();
+     int i=OccOf(lon,dtue);g_pocc[i].state=0;PPRead(i,g_test_now);
+     for(int k=0;k<5;k++)PPScanAlert(i,g_test_now);
+     CHECK(g_pocc[i].tk[7]==SV(2026,11,17,12,30) && g_sounds==s0+1);                                               // London 75%, taken at 12:30
+     g_pact.rows[lon].parts&=~FPPP_Q;PPResetTaken(g_pocc[i],FPPK_WINDOW);g_pocc[i].scan_to=0;g_gv.clear();
+     for(int k=0;k<5;k++)PPScanAlert(i,g_test_now);CHECK(g_sounds==s0+1);                                         // not shown: no alert
+     g_test_now=SV(2026,11,17,14,0);PPMakeBars(g_test_now);
+    }
+
+    // ---- settings: schema 2 keeps the new choices; a 1.67 (schema 1) file still reads
+    {FPPointConfig c=pc;c.taken_end=2;c.label_bold=true;c.days_back=120;c.rows[lon].bold=1;c.rows[lon].ends=4;c.rows[asia].ends=3;c.rows[lon].parts|=FPPP_Q|FPPP_E;
+     CHECK(FPPWriteFile("t68.points",c));
+     FPPointConfig r;CHECK(FPPReadFile("t68.points",r) && r.taken_end==2 && r.label_bold && r.days_back==120 && r.rows[lon].bold==1 && r.rows[lon].ends==4
+                           && r.rows[asia].ends==3 && (r.rows[lon].parts&(FPPP_Q|FPPP_E))==(FPPP_Q|FPPP_E));
+     c.days_back=121;CHECK(!FPPWriteFile("bad.points",c));c.days_back=120;
+     c.taken_end=3;CHECK(!FPPWriteFile("bad.points",c));c.taken_end=0;
+     c.rows[2].bold=3;CHECK(!FPPWriteFile("bad.points",c));c.rows[2].bold=0;
+     c.rows[2].ends=5;CHECK(!FPPWriteFile("bad.points",c));c.rows[2].ends=0;
+     c.rows[FindRow(c,"Midnight open")].parts|=FPPP_Q;CHECK(!FPPWriteFile("bad.points",c));}                       // an open has no range to split
+    {FPPointConfig old=pc;old.rows[lon].ends=2;old.days_back=45;WritePointsV1("v1.points",old,1024);
+     FPPointConfig r;CHECK(FPPReadFile("v1.points",r) && r.count==30 && r.days_back==45 && r.rows[lon].ends==2 && r.rows[1].enabled && r.rows[2].name=="NWOG");
+     CHECK(r.taken_end==0 && !r.label_bold && r.rows[lon].bold==0);}                                                 // the new settings at their defaults
+
+    // ---- 120 trading days back; windows, opens and gaps read from M5 where the terminal has no M1
+    {g_pact=pc;g_pact.days_back=120;PPBuild();CHECK(OccCount(lon)==120 && OccOf(lon,dtue)>=0);
+     long oldest=dtue;for(int i=0;i<g_pocc_n;i++)if(g_pocc[i].row==lon && g_pocc[i].key<oldest)oldest=g_pocc[i].key;
+     int wd=0;for(long d=oldest;d<=dtue;d++)if(FPDow(d)>=1 && FPDow(d)<=5)wd++;CHECK(wd==120);}                    // trading days, weekends skipped
+    PPSetBar(2026,11,13,9,7,1.1,1.1010,1.0999,1.1);                                                                // Friday's high at 09:07
+    {g_m1_from=0;g_pact=pc;g_pact.days_back=3;PPBuild();int lf=OccOf(lon,dfri);PPRead(lf,g_test_now);
+     CHECK(g_pocc[lf].hi==1.1010 && g_pocc[lf].th==SV(2026,11,13,9,7));}                                          // with M1: the minute
+    g_m1_from=SV(2026,11,16,0,0);                                                                                  // the terminal's M1 history starts on Monday
+    {g_pact=pc;g_pact.days_back=3;g_pact.rows[org].enabled=true;g_pact.rows[day].enabled=true;g_pocc_dirty=true;PPBuild();
+     int lf=OccOf(lon,dfri),om=OccOf(org,dmon),df=OccOf(day,dfri);
+     g_pocc[lf].state=0;PPRead(lf,g_test_now);
+     CHECK(g_pocc[lf].state==1 && g_pocc[lf].hi==1.1010 && g_pocc[lf].th==SV(2026,11,13,9,5));                     // from M5: its candle
+     g_pocc[om].state=0;PPRead(om,g_test_now);
+     CHECK(g_pocc[om].state==1 && g_pocc[om].cl==1.1 && g_pocc[om].tc==SV(2026,11,13,16,10));                     // the ORG close from M5
+     g_pocc[df].state=0;PPRead(df,g_test_now);
+     CHECK(g_pocc[df].state==1 && g_pocc[df].hi==1.1010 && g_pocc[df].th==SV(2026,11,13,9,5) && g_pocc[df].to==SV(2026,11,13,9,0));   // a period refined with M5
+    }
+    g_m1_from=0;PPMakeBars(g_test_now);
+
+    // ---- the window: where taken lines end, bold, the Ends choices, quadrant and octant switches, 120 days
+    g_pstore="mem68.points";g_disk.erase("mem68.points");g_pcfg=pc;g_pact=g_pcfg;g_pocc_dirty=true;
+    OpenPoints();CHECK(g_peditor);
+    PointsClick("Tab0");g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("N.TakenEnd0"))>=0 && RegFind(UIS("N.TakenEnd2"))>=0);
+    PointsClick("TakenEnd1");CHECK(g_pedit.taken_end==1 && g_pact.taken_end==1 && g_pedit.taken_show==0);
+    PointsClick("Taken1");CHECK(g_pedit.taken_show==1 && g_pedit.taken_end==1);PointsClick("Taken0");
+    g_ui_dirty=true;BuildUI();ObjectSetString(0,UIS("N.Days"),OBJPROP_TEXT,"150");PEndEdit(UIS("N.Days"));CHECK(g_pedit.days_back==120);
+    ObjectSetString(0,UIS("N.Days"),OBJPROP_TEXT,"120");PEndEdit(UIS("N.Days"));
+    PointsClick("Tab1");g_ui_dirty=true;BuildUI();CHECK(RegFind(UIS("N.Bold"))>=0);PointsClick("Bold");CHECK(g_pedit.label_bold && g_pact.label_bold);
+    PointsClick("Tab3");g_ppage=3;g_ui_dirty=true;BuildUI();
+    CHECK(RegFind(UIS("N.P64_26"))>=0 && RegFind(UIS("N.P128_26"))>=0 && RegFind(UIS("N.P64_29"))>=0 && RegFind(UIS("N.P64_9"))<0);
+    PointsClick("P64_26");CHECK((g_pedit.rows[25].parts&FPPP_Q)!=0 && (g_pedit.rows[25].parts&FPPP_E)==0);
+    PointsClick("P128_26");CHECK((g_pedit.rows[25].parts&FPPP_E)!=0);
+    PointsClick("Ends26");CHECK(g_popup==23 && g_popup_items==5);DropdownChoice(2);ClosePopup();CHECK(g_pedit.rows[25].ends==3);
+    PointsClick("Ends26");DropdownChoice(3);ClosePopup();CHECK(g_pedit.rows[25].ends==4);
+    PointsClick("Ends26");DropdownChoice(1);ClosePopup();CHECK(g_pedit.rows[25].ends==1);
+    PointsClick("More26");CHECK(g_popup==16 && RegFind(Obj("Q.B1"))>=0);PPPopupClick(Obj("Q.B1"));CHECK(g_pedit.rows[25].bold==1);
+    ClosePopup();BuildUI();CHECK(g_popup==16);PPPopupClick(Obj("Q.B2"));CHECK(g_pedit.rows[25].bold==2);
+    ClosePopup();BuildUI();PPPopupClick(Obj("Q.Done"));
+    PointsClick("OK");CHECK(!g_peditor);
+    {FPPointConfig back;CHECK(FPPReadFile("mem68.points",back) && back.taken_end==1 && back.label_bold && back.days_back==120 && back.rows[25].bold==2
+                              && back.rows[25].ends==1 && (back.rows[25].parts&(FPPP_Q|FPPP_E))==(FPPP_Q|FPPP_E));}
+    g_count=0;g_selected=-1;g_zact.enabled=true;g_zcfg.enabled=true;g_first_bar=0;g_m1_from=0;
    }
 
    std::printf(fails?"%d FAILED\n":"all tests passed\n",fails);

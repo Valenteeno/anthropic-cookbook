@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.67 | `Fibonacci_Pro_13.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.66 with ICT price points and numbered drawing names. The calibration script is unchanged (1.66). |
+| 1.68 | `Fibonacci_Pro_14.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.67 with price point ray back to the chart's history, taken lines to the end of their day or week, quadrants and octants, bold labels and 120 days back. The calibration script is unchanged (1.66). |
+| 1.67 | `Fibonacci_Pro_13.mq5` | Kept unchanged. Commit `491af21`. 1.66 with ICT price points and numbered drawing names. |
 | 1.66 | `Fibonacci_Pro_12.mq5` | Kept unchanged. Commit `f3625ea`. 1.65 with a lot size & risk crosshair, and a calibration script for it. |
 | 1.65 | `Fibonacci_Pro_11.mq5` | Kept unchanged. Commit `b9395f4`. Drawings typed automatically (FVG, VI, UFVG, SPB, OB, PW, DW, KH, KL, KR), coloured by timeframe. |
 | 1.64 | `Fibonacci_Pro_10.mq5` | Kept unchanged. Commit `bece2ee`. Fib and zone shading blended, so killzones stay visible over Fib ranges. |
@@ -24,6 +25,39 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - Drawings saved by 1.65 open in every earlier version (details under 1.65).
 - 1.66 keeps its risk settings in separate files, so 1.65 opens everything 1.66 saves.
 - 1.67 keeps price point settings in separate files, so 1.66 opens everything 1.67 saves.
+- Price point settings saved by 1.68 can't be read by 1.67 (details under 1.68).
+
+## 1.68
+
+**Ray back reaches the chart's history.** A rayed price point now runs back to the oldest candle the chart has on its timeframe.
+- It stays drawn when you scroll back before the candle it formed on.
+- In 1.67 it stopped at the left edge of the view, and disappeared once the view was before that candle.
+
+**Taken lines can run to the end of their day or week.** In Parameters, **Taken lines run to** offers three choices:
+- **The take** (as in 1.67).
+- **The end of that day:** 17:00 New York of the trading day it was taken in.
+- **The end of that week:** Friday 17:00 New York.
+
+The choice applies to lines and zones. A taken level keeps its taken look (dimmed, hidden or kept). Per row, **Ends** now offers: as set in Parameters, at the take, the end of that day, the end of that week, or run on.
+
+**Quadrants and octants.** The Parts column has two new switches for every row with a range: sessions, pre-sessions, opening ranges, gaps, FPFVG/FPOB, and day, week and month.
+- **1/4** draws the 25% and 75% levels.
+- **1/8** draws the 12.5%, 37.5%, 62.5% and 87.5% levels.
+- **The range:** from its low to its high. For a gap, its close and open; for a zone, its bottom and top. The CE keeps its own switch.
+- **Look:** dotted. Quadrants are a little lighter than the other lines, octants lighter still.
+- **Labels** show just the share ("25%"); the hover info names the row ("London 25%").
+- **Taken:** like the CE, each ends where price reaches it, and can alert when the row shows it.
+
+**Bold labels.** Visualization → **Bold labels** sets every row's labels in bold. A row's ... options can set its own labels bold or regular instead.
+
+**Look back up to 120 trading days** (was 60).
+- Many terminals keep only about 70 trading days of M1 candles (MT5's "Max bars in chart" setting).
+- Where M1 candles are missing, windows, opens, gaps and the minute refinement of day, week and month levels read M5 candles instead. Those older days still draw, anchored to the 5-minute candle rather than the minute.
+- FPFVG and FPOB need M1 candles, so they don't appear on those older days.
+
+**Window:** the Price points window is wider (700 px) to fit the new switches.
+
+**Files:** the price point settings file stores the new settings (schema 2). 1.68 reads the files 1.67 saved, but 1.67 can't read the ones 1.68 saves; it falls back to its backup or its defaults.
 
 ## 1.67
 
