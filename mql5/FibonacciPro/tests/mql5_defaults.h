@@ -10,8 +10,9 @@ long SymbolInfoInteger(const string&,ENUM_SYMBOL_INFO_INTEGER){return 0;}
 string SymbolInfoString(const string&,ENUM_SYMBOL_INFO_STRING){return "";}
 int SymbolsTotal(bool){return 0;}string SymbolName(int,bool){return "";}bool SymbolSelect(const string&,bool){return true;}
 #endif
-bool CCanvas::CreateBitmapLabel(long,int,const string&,int,int,int w,int h,ENUM_COLOR_FORMAT){m_w=w;m_h=h;return true;}
-void CCanvas::Destroy(){m_w=0;m_h=0;}int CCanvas::Width(){return m_w;}int CCanvas::Height(){return m_h;}void CCanvas::Erase(uint){}void CCanvas::Update(bool){}
+// As in MT5, the canvas is an object on the chart: created with it, deleted with it.
+bool CCanvas::CreateBitmapLabel(long chart,int sub,const string& name,int,int,int w,int h,ENUM_COLOR_FORMAT){m_w=w;m_h=h;m_name=name;ObjectCreate(chart,name,OBJ_BITMAP_LABEL,sub,0,0);return true;}
+void CCanvas::Destroy(){m_w=0;m_h=0;if(!m_name.empty()){ObjectDelete(0,m_name);m_name="";}}int CCanvas::Width(){return m_w;}int CCanvas::Height(){return m_h;}void CCanvas::Erase(uint){}void CCanvas::Update(bool){}
 void CCanvas::PixelSet(int,int,uint){}void CCanvas::Rectangle(int,int,int,int,uint){}
 #ifndef TEST_OWN_CANVAS
 void CCanvas::FillRectangle(int,int,int,int,uint){}
@@ -21,7 +22,10 @@ void CCanvas::Line(int,int,int,int,uint){}
 bool CCanvas::FontSet(const string&,int,uint,uint){return true;}
 #endif
 int CCanvas::TextWidth(const string& t){return (int)t.size()*6;}int CCanvas::TextHeight(const string&){return 14;}void CCanvas::TextOut(int,int,const string&,uint,uint){}
-double ChartGetDouble(long,ENUM_CHART_PROPERTY_DOUBLE,int){return 0;}long ChartGetInteger(long,ENUM_CHART_PROPERTY_INTEGER,int){return 0;}
+double ChartGetDouble(long,ENUM_CHART_PROPERTY_DOUBLE,int){return 0;}
+// The chart's size in pixels, as a test sets it (0: unknown, as before).
+static int g_fake_chart_w=0,g_fake_chart_h=0;
+long ChartGetInteger(long,ENUM_CHART_PROPERTY_INTEGER p,int){return p==CHART_WIDTH_IN_PIXELS?g_fake_chart_w:(p==CHART_HEIGHT_IN_PIXELS?g_fake_chart_h:0);}
 long ChartID(){return 1;}bool ChartIndicatorDelete(long,int,const string&){return true;}bool ChartNavigate(long,ENUM_CHART_POSITION,int){return true;}
 void ChartRedraw(long){}bool ChartSetInteger(long,ENUM_CHART_PROPERTY_INTEGER,long){return true;}
 #ifndef TEST_OWN_XY

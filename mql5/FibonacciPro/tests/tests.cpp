@@ -1,4 +1,4 @@
-// Behavioural tests for Fibonacci_Pro_16.mq5 (1.70), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_17.mq5 (1.71), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
@@ -1898,7 +1898,7 @@ int main()
     CHECK(g_share_msg=="Exported drawing style, zones, price points, risk, 3 presets." && g_status==g_share_msg);
     auto Entry=[&](const string& n)->string
       {for(int i=0;i<g_fps_n;i++)if(g_fps_names[i]==n)return string(g_fps_data.v.begin()+g_fps_start[i],g_fps_data.v.begin()+g_fps_start[i]+g_fps_size[i]);return "<none>";};
-    CHECK(FPSLoad(FPS_FILE,FILE_COMMON)==1 && g_fps_n==7 && g_fps_version=="1.70" && g_fps_time==g_test_now);
+    CHECK(FPSLoad(FPS_FILE,FILE_COMMON)==1 && g_fps_n==7 && g_fps_version==FP_VERSION && g_fps_time==g_test_now);
     CHECK(Entry("zones")==g_disk[g_zstore] && Entry("points")==g_disk[g_pstore] && Entry("risk")==g_disk[g_rstore] && Entry("style")==g_disk[g_last_store]);
     CHECK(Entry("preset/My fib.fpp")==g_disk[presets+"My fib.fpp"] && Entry("preset/My zones.fzp")==g_disk[presets+"My zones.fzp"] && Entry("preset/My points.fpt")==g_disk[presets+"My points.fpt"]);
     CHECK(Entry("preset/builtins.v1")=="<none>" && Entry("preset/My fib.fpp.bak")=="<none>" && Entry("preset/Half.fpp.tmp.7")=="<none>" && Entry("preset/notes.txt")=="<none>");
@@ -1979,7 +1979,8 @@ int main()
      for(auto& kv:keep){g_disk[kv.first]=kv.second;CHECK(!FPSOffer());g_disk.erase(kv.first);}                     // any one saved file: no offer
      for(auto& kv:keep)g_disk[kv.first]=kv.second;}
 
-    // ---- the Share button and popup
+    // ---- the Share button and popup, on a chart drawn at its size that isn't resized meanwhile
+    g_fake_chart_w=g_width;g_fake_chart_h=g_height;g_dirty=true;Render();
     g_ui_dirty=true;BuildUI();
     int sx=g_toolbar_x+U(FP_TOOLBAR_WIDTH-284)+5,sy=g_toolbar_y+U(5);
     CHECK(RegFind(UIS("T.Share"))>=0 && HitShareButton(sx,sy) && !HitShareButton(g_toolbar_x+U(FP_TOOLBAR_WIDTH-200),sy) && !HitPointsButton(sx,sy));
@@ -1990,8 +1991,25 @@ int main()
     g_editor=true;Click(UIS("T.Share"));CHECK(g_popup!=17 && g_status=="Finish or cancel Properties first.");g_editor=false;
     g_list=true;Click(UIS("T.Share"));
     CHECK(g_popup==17 && !g_list && RegFind(Obj("Q.Export"))>=0 && RegFind(Obj("Q.Import"))>=0 && HitUI(g_popup_x+5,g_popup_y+5) && g_popup_y>g_toolbar_y);
+    // It stays open through the frames that follow the click, as the terminal runs them (the
+    // release defers UI rebuilds by 32 ms, and a deferred rebuild closes popups).
+    auto Frames=[&](int n){for(int k=0;k<n;k++){g_fake_ticks+=40;RefreshFrame();}};
+    FinishPointer(sx,sy);Frames(5);
+    CHECK(g_popup==17 && RegFind(Obj("Q.Export"))>=0 && RegFind(UIS("L.Search"))<0);
+    CHECK(g_popup_y>=g_toolbar_y+U(FP_TOOLBAR_HEIGHT+2)+U(20));                                                    // below the status line
+    Click(UIS("T.Share"));CHECK(g_popup==0);g_ui_dirty=true;                                                        // a rebuild already pending
+    Click(UIS("T.Share"));FinishPointer(sx,sy);Frames(5);CHECK(g_popup==17 && RegFind(Obj("Q.Export"))>=0);
+    // The folder box: its text can be selected and copied; anything typed into it is put back.
+    ObjectSetString(0,Obj("Q.Path"),OBJPROP_TEXT,"typed");
+    {long lp=0;double dp=0;string sp=Obj("Q.Path");OnChartEvent(CHARTEVENT_OBJECT_ENDEDIT,lp,dp,sp);}
+    CHECK(g_popup==17 && g_texts[Obj("Q.Path")]==FPSFolder());
+    // The same through the terminal's own events: the press, the button's click, the release, then frames.
+    Click(Obj("Q.Done"));CHECK(g_popup==0);
+    {long lp=sx;double dp=sy;string down="1",up="0",nm=UIS("T.Share");
+     OnChartEvent(CHARTEVENT_MOUSE_MOVE,lp,dp,down);OnChartEvent(CHARTEVENT_OBJECT_CLICK,lp,dp,nm);OnChartEvent(CHARTEVENT_MOUSE_MOVE,lp,dp,up);
+     Frames(5);CHECK(g_popup==17 && RegFind(Obj("Q.Export"))>=0 && !g_toolbar_drag);}
     CHECK(g_texts[Obj("Q.Path")]=="C:\\Users\\T\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\FibonacciPro");
-    CHECK(g_texts[Obj("Q.File")]=="Saved "+std::to_string(g_test_now)+" (1.70): drawing style, zones, price points, risk, 3 presets");
+    CHECK(g_texts[Obj("Q.File")]=="Saved "+std::to_string(g_test_now)+" ("+string(FP_VERSION)+"): drawing style, zones, price points, risk, 3 presets");
     Click(Obj("Q.S8"));CHECK(g_share_parts==7 && g_popup==17);Click(Obj("Q.S8"));CHECK(g_share_parts==15);
     Click(Obj("Q.S1"));Click(Obj("Q.S2"));Click(Obj("Q.S4"));CHECK(g_share_parts==8);Click(Obj("Q.S1"));Click(Obj("Q.S2"));Click(Obj("Q.S4"));CHECK(g_share_parts==15);
     Click(Obj("Q.Clock"));CHECK(!g_share_clock);Click(Obj("Q.Clock"));CHECK(g_share_clock);
@@ -2000,6 +2018,8 @@ int main()
     Click(Obj("Q.Import"));CHECK(g_pcfg.days_back==5 && g_share_msg.find("Click Import again")==0 && g_texts[Obj("Q.Import")]=="Click again");
     g_fake_ticks+=6000;Click(Obj("Q.Import"));CHECK(g_pcfg.days_back==5 && g_texts[Obj("Q.Import")]=="Click again");  // too late: it asks again
     Click(Obj("Q.Import"));CHECK(g_pcfg.days_back==17 && g_share_msg.find("Imported")==0 && g_texts[Obj("Q.Msg")]==g_share_msg && g_texts[Obj("Q.Import")]=="Import");
+    Frames(5);CHECK(g_popup==17 && g_texts[Obj("Q.Msg")]==g_share_msg);                                          // still open after an import
+    Click(Obj("Q.Export"));Frames(5);CHECK(g_popup==17 && g_share_msg.find("Exported ")==0);                         // and after an export
     g_pcfg.days_back=5;Click(Obj("Q.Import"));Click(Obj("Q.Clock"));Click(Obj("Q.Import"));                          // another click in between: it asks again
     CHECK(g_pcfg.days_back==5 && g_share_msg.find("Click Import again")==0);
     Click(Obj("Q.Clock"));g_pcfg.days_back=17;

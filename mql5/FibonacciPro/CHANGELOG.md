@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.70 | `Fibonacci_Pro_16.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.69 with settings shared between terminals (the Share button). The calibration script is unchanged (1.66). |
+| 1.71 | `Fibonacci_Pro_17.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.70 with the Share popup fixed: in 1.70 it closed as soon as it opened. The calibration script is unchanged (1.66). |
+| 1.70 | `Fibonacci_Pro_16.mq5` | Kept unchanged. Commit `1d403ab`. 1.69 with settings shared between terminals (the Share button). Its Share popup closes as soon as it opens: use 1.71. |
 | 1.69 | `Fibonacci_Pro_15.mq5` | Kept unchanged. Commit `df9de19`. 1.68 with price points rayed forward, ends dragged by hand, buttons that act on one line, AS/LN/NY session names, and zones 120 days back. |
 | 1.68 | `Fibonacci_Pro_14.mq5` | Kept unchanged. Commit `20a63e4`. 1.67 with price point ray back to the chart's history, taken lines to the end of their day or week, quadrants and octants, bold labels and 120 days back. |
 | 1.67 | `Fibonacci_Pro_13.mq5` | Kept unchanged. Commit `491af21`. 1.66 with ICT price points and numbered drawing names. |
@@ -30,7 +31,17 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - Price point settings saved by 1.68 can't be read by 1.67 (details under 1.68).
 - Price point settings saved by 1.69, and the price points it rays, hides or extends on a chart, can't be read by 1.68 or 1.67 (details under 1.69).
 - Zone settings and zone presets with more than 60 days back can't be read by 1.68 or older.
-- 1.70 saves its settings exactly as 1.69 does, so 1.69 opens everything 1.70 saves. Older versions ignore the shared settings file.
+- 1.70 and 1.71 save their settings exactly as 1.69 does, so 1.69 opens everything they save. Older versions ignore the shared settings file.
+
+## 1.71
+
+**Fix: the Share popup closed as soon as it opened.** Clicking **Share** showed the popup for a moment, then it was gone.
+- **Cause:** opening the popup also asked for the toolbar to be rebuilt. The tool runs such a rebuild shortly after a click (32 ms later, so clicks still queued in MetaTrader reach the right buttons), and a rebuild closes any open popup.
+- **Fix:** the popup opens with no rebuild pending. After an import, the toolbar is rebuilt at once, so the popup and its message stay up.
+
+**Also in the Share popup:**
+- It opens below the status line, which used to be drawn over its title row whenever a message showed.
+- The folder box is an ordinary edit box, so the path can be selected and copied with Ctrl+C. Anything typed into it is put back.
 
 ## 1.70
 

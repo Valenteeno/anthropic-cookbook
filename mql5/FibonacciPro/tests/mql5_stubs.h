@@ -123,6 +123,7 @@ long FileFindFirst(const string& filter,string& name,int common=0);bool FileFind
 uint FileReadArray(int h,MQLArr<uchar>& a,int start=0,int count=-1);uint FileWriteArray(int h,MQLArr<uchar>& a,int start=0,int count=-1);
 class CCanvas{public:
  int m_w=0,m_h=0;   // size of the created bitmap, as MT5 reports it
+ string m_name;     // its chart object (OBJ_BITMAP_LABEL), as in MT5
  bool CreateBitmapLabel(long chart,int sub,const string& name,int x,int y,int w,int h,ENUM_COLOR_FORMAT fmt);
  void Destroy();int Width();int Height();void Erase(uint clr=0);void Update(bool redraw=true);
  void PixelSet(int x,int y,uint clr);void FillRectangle(int x1,int y1,int x2,int y2,uint clr);void Rectangle(int x1,int y1,int x2,int y2,uint clr);
