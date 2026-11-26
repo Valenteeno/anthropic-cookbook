@@ -4,7 +4,8 @@ Each version is kept as its own source file, so any version can be installed or 
 
 | Version | File | Status |
 |---|---|---|
-| 1.69 | `Fibonacci_Pro_15.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.68 with price points rayed forward, ends dragged by hand, buttons that act on one line, AS/LN/NY session names, and zones 120 days back. The calibration script is unchanged (1.66). |
+| 1.70 | `Fibonacci_Pro_16.mq5` + `Fibonacci_Pro_Calibrate.mq5` | **Current.** 1.69 with settings shared between terminals (the Share button). The calibration script is unchanged (1.66). |
+| 1.69 | `Fibonacci_Pro_15.mq5` | Kept unchanged. Commit `df9de19`. 1.68 with price points rayed forward, ends dragged by hand, buttons that act on one line, AS/LN/NY session names, and zones 120 days back. |
 | 1.68 | `Fibonacci_Pro_14.mq5` | Kept unchanged. Commit `20a63e4`. 1.67 with price point ray back to the chart's history, taken lines to the end of their day or week, quadrants and octants, bold labels and 120 days back. |
 | 1.67 | `Fibonacci_Pro_13.mq5` | Kept unchanged. Commit `491af21`. 1.66 with ICT price points and numbered drawing names. |
 | 1.66 | `Fibonacci_Pro_12.mq5` | Kept unchanged. Commit `f3625ea`. 1.65 with a lot size & risk crosshair, and a calibration script for it. |
@@ -29,6 +30,35 @@ All versions read and write the same drawings file, presets and toolbar layout. 
 - Price point settings saved by 1.68 can't be read by 1.67 (details under 1.68).
 - Price point settings saved by 1.69, and the price points it rays, hides or extends on a chart, can't be read by 1.68 or 1.67 (details under 1.69).
 - Zone settings and zone presets with more than 60 days back can't be read by 1.68 or older.
+- 1.70 saves its settings exactly as 1.69 does, so 1.69 opens everything 1.70 saves. Older versions ignore the shared settings file.
+
+## 1.70
+
+**Share settings with other terminals.** Each account (trade server and login) keeps its own settings, so another terminal or another account used to start from the defaults. A new **Share** button on the toolbar copies them across:
+- **Export** writes one file, `FibonacciPro.settings`, to MetaTrader's Common folder (`...\MetaQuotes\Terminal\Common\Files\FibonacciPro`). Every MetaTrader 5 on the computer can open it. The previous file is kept as `.bak`.
+- **Import**, in another terminal or account, takes the file's settings. Choose what to take: **Styles & presets**, **Zones**, **Price points** and **Risk**. Import asks for a second click before it replaces anything.
+- **Another computer:** copy the file into the same folder there. The popup shows the folder's full path in a box you can copy from.
+
+**What's in the file:**
+- The last-used drawing style.
+- Zone, price point and risk settings.
+- Every preset: drawing presets (including the typed styles such as FVG or OB), zone presets and price point presets.
+
+**What isn't:**
+- Drawings: they belong to a chart and its symbol.
+- Price points rayed, hidden or extended on a chart, and the toolbar position.
+- The lot-size calibration: it is measured per broker server, so run the script once in each terminal.
+- The indicator's inputs (shortcuts, timeframe colours and so on): save those with MetaTrader's own **Save** button in the indicator's Inputs tab, or in a chart template.
+
+**Import is careful:**
+- **Broker clock:** the account keeps its own broker clock (Zones) by default, because brokers' server times differ. Switch off **Keep this account's broker clock** to take the file's.
+- **Checked first:** each part is read with the same checks the tool uses for its own files. A part that can't be read (damaged, or from a newer version) or saved is reported and left as it was; the rest is imported. A damaged file imports nothing.
+- **Backups:** replaced settings files and same-named presets are kept as `.bak`. Other presets stay.
+- **At once:** imported settings apply immediately; nothing needs a restart.
+
+**Start-up hint:** on an account with nothing saved yet, when the computer has a shared file, the tool says so at start-up: "Settings from another terminal are ready: Share, then Import, to use them here."
+
+**Windows:** Share opens only while the Properties, Zones, Risk and Price points windows are closed, so unsaved edits can't overwrite an import.
 
 ## 1.69
 

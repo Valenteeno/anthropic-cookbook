@@ -1,4 +1,4 @@
-// Behavioural tests for Fibonacci_Pro_15.mq5 (1.69), translated to fp5.cpp by translate.py.
+// Behavioural tests for Fibonacci_Pro_16.mq5 (1.70), translated to fp5.cpp by translate.py.
 #define TEST_OWN_XY
 #define TEST_OWN_FILES
 #define TEST_OWN_TIME
@@ -1503,7 +1503,7 @@ int main()
     // Presets: saved, loaded; two built in (read-only).
     OpenPoints();g_preset_name="My points";PresetBrowser(true);CHECK(g_popup==4 && g_preset_points && !g_preset_zones);
     PresetAction();CHECK(g_disk.count("FibonacciPro\\Presets\\My points.fpt")==1);
-    PresetBrowser(false);CHECK(g_preset_count==2 && g_preset_names[0]==FPP_BUILTIN_ICT && g_preset_names[1]==FPP_BUILTIN_OFF);
+    PresetBrowser(false);CHECK(g_preset_count==3 && g_preset_names[0]==FPP_BUILTIN_ICT && g_preset_names[1]==FPP_BUILTIN_OFF && g_preset_names[2]=="My points");
     ObjectSetString(0,Obj("R.Name"),OBJPROP_TEXT,FPP_BUILTIN_OFF);PresetAction();
     {bool any=false;for(int i=0;i<g_pedit.count;i++)if(g_pedit.rows[i].enabled)any=true;CHECK(!any && g_pedit.count==30);}
     PresetBrowser(false);ObjectSetString(0,Obj("R.Name"),OBJPROP_TEXT,"My points");PresetAction();CHECK(g_pedit.rows[0].enabled && g_pedit.rows[1].enabled);
@@ -1871,6 +1871,155 @@ int main()
      g_m1_from=0;g_zact.enabled=false;
     }
     g_count=0;g_selected=-1;g_zact.enabled=true;g_zcfg.enabled=true;g_first_bar=0;g_m1_from=0;g_psel_uid=0;
+   }
+
+   // ==== 1.70: settings shared with other terminals through MetaTrader's Common folder
+   {
+    const string common="<Common>\\",shared=common+"FibonacciPro\\FibonacciPro.settings",presets="FibonacciPro\\Presets\\";
+    g_owner=true;g_hidden=false;g_editor=false;g_zeditor=false;g_reditor=false;g_peditor=false;g_list=false;g_popup=0;g_count=0;g_selected=-1;
+    g_width=1000;g_height=600;g_test_now=SV(2026,11,26,14,5);g_share_parts=15;g_share_clock=true;
+    for(auto it=g_disk.begin();it!=g_disk.end();)if(it->first.rfind(presets,0)==0 || it->first.rfind(common,0)==0)it=g_disk.erase(it);else ++it;
+    // Account A of the first terminal: its settings, three presets, and files that are never shared.
+    g_zstore="FibonacciPro\\A_1_Main.zones";g_pstore="FibonacciPro\\A_1_Main.points";g_rstore="FibonacciPro\\A_1.risk";g_last_store="FibonacciPro\\A_1_Main.last.fpp";
+    for(const string& f:{g_zstore,g_pstore,g_rstore,g_last_store})g_disk.erase(f);
+    FPZoneDefaults(g_zcfg,false);g_zcfg.days_back=33;g_zcfg.broker_mode=2;g_zcfg.broker_gmt=3;CHECK(SaveZones());
+    FPPDefaults(g_pcfg);g_pcfg.days_back=17;int lon=FindRow(g_pcfg,"London");g_pcfg.rows[lon].sname="LDN";CHECK(SavePoints());
+    FPRDefaults(g_rcfg);g_rcfg.mode=1;g_rcfg.percent=0.75;g_rcfg.targets="2 3";CHECK(SaveRisk());
+    FPSetup style;FPFactoryStyle(FPK_KR,style);style.base_color=(color)0x112233;CHECK(WritePreset(g_last_store,style));
+    FPSetup mine;FPFactoryStyle(FPK_FVG,mine);mine.base_color=(color)0x445566;CHECK(WritePreset(presets+"My fib.fpp",mine) && WritePreset(presets+"My fib.fpp",mine));
+    {FPZoneConfig zp;FPZoneDefaults(zp,false);zp.days_back=44;CHECK(FPZWriteFile(presets+"My zones.fzp",zp));}
+    {FPPointConfig pp;FPPDefaults(pp);pp.days_back=9;CHECK(FPPWriteFile(presets+"My points.fpt",pp));}
+    g_disk[presets+"builtins.v1"]="x";g_disk[presets+"Half.fpp.tmp.7"]="x";g_disk[presets+"notes.txt"]="x";
+    CHECK(g_disk.count(presets+"My fib.fpp.bak")==1);
+
+    // ---- export: one file in the Common folder, its parts the bytes of their own files
+    CHECK(FPSExport()==7 && g_disk.count(shared)==1 && g_disk.count(shared+".bak")==0);                           // 4 settings and 3 presets
+    {bool left=false;for(auto& kv:g_disk)if(kv.first.rfind(common,0)==0 && kv.first.find(".tmp.")!=string::npos)left=true;CHECK(!left);}
+    CHECK(g_share_msg=="Exported drawing style, zones, price points, risk, 3 presets." && g_status==g_share_msg);
+    auto Entry=[&](const string& n)->string
+      {for(int i=0;i<g_fps_n;i++)if(g_fps_names[i]==n)return string(g_fps_data.v.begin()+g_fps_start[i],g_fps_data.v.begin()+g_fps_start[i]+g_fps_size[i]);return "<none>";};
+    CHECK(FPSLoad(FPS_FILE,FILE_COMMON)==1 && g_fps_n==7 && g_fps_version=="1.70" && g_fps_time==g_test_now);
+    CHECK(Entry("zones")==g_disk[g_zstore] && Entry("points")==g_disk[g_pstore] && Entry("risk")==g_disk[g_rstore] && Entry("style")==g_disk[g_last_store]);
+    CHECK(Entry("preset/My fib.fpp")==g_disk[presets+"My fib.fpp"] && Entry("preset/My zones.fzp")==g_disk[presets+"My zones.fzp"] && Entry("preset/My points.fpt")==g_disk[presets+"My points.fpt"]);
+    CHECK(Entry("preset/builtins.v1")=="<none>" && Entry("preset/My fib.fpp.bak")=="<none>" && Entry("preset/Half.fpp.tmp.7")=="<none>" && Entry("preset/notes.txt")=="<none>");
+    string ez=Entry("zones"),ep=Entry("points"),ef=Entry("preset/My fib.fpp");
+    {string first=g_disk[shared];g_zcfg.days_back=34;CHECK(SaveZones() && FPSExport()==7 && g_disk[shared+".bak"]==first && g_disk[shared]!=first);   // the previous one kept
+     g_zcfg.days_back=33;CHECK(SaveZones() && FPSExport()==7);}
+    string good=g_disk[shared];
+    {string z=g_zstore,pt=g_pstore,r=g_rstore,l=g_last_store;                                                     // an account with nothing saved
+     g_zstore="FibonacciPro\\none.zones";g_pstore="FibonacciPro\\none.points";g_rstore="FibonacciPro\\none.risk";g_last_store="FibonacciPro\\none.fpp";
+     std::map<string,string> keep;for(auto it=g_disk.begin();it!=g_disk.end();)if(it->first.rfind(presets,0)==0){keep.insert(*it);it=g_disk.erase(it);}else ++it;
+     CHECK(FPSExport()==0 && g_disk[shared]==good && g_share_msg.find("Nothing to export")==0);
+     for(auto& kv:keep)g_disk.insert(kv);g_zstore=z;g_pstore=pt;g_rstore=r;g_last_store=l;}
+
+    // ---- import, on account B of another terminal: its own settings, presets and broker clock
+    for(auto it=g_disk.begin();it!=g_disk.end();)if(it->first.rfind(presets,0)==0)it=g_disk.erase(it);else ++it;
+    g_zstore="FibonacciPro\\B_2_Main.zones";g_pstore="FibonacciPro\\B_2_Main.points";g_rstore="FibonacciPro\\B_2.risk";g_last_store="FibonacciPro\\B_2_Main.last.fpp";
+    for(const string& f:{g_zstore,g_pstore,g_rstore,g_last_store})g_disk.erase(f);
+    FPZoneDefaults(g_zcfg,false);g_zcfg.broker_mode=4;g_zcfg.broker_gmt=-5;g_zact=g_zcfg;FPPDefaults(g_pcfg);g_pact=g_pcfg;FPRDefaults(g_rcfg);
+    FPSetup theirs;FPFactoryStyle(FPK_OB,theirs);CHECK(WritePreset(presets+"My fib.fpp",theirs) && WritePreset(presets+"Other.fpp",theirs));
+    g_has_last_config=false;
+    CHECK(FPSOffer());                                                                                              // nothing saved yet, and a shared file
+    g_zocc_dirty=false;g_pocc_dirty=false;
+    CHECK(FPSImport());
+    CHECK(g_zcfg.days_back==33 && g_zcfg.broker_mode==4 && g_zcfg.broker_gmt==-5 && g_zact.days_back==33 && g_zocc_dirty);  // its own broker clock kept
+    {FPZoneConfig r;CHECK(FPZReadFile(g_zstore,r) && r.days_back==33 && r.broker_mode==4 && r.broker_gmt==-5);}
+    CHECK(g_pcfg.days_back==17 && g_pact.days_back==17 && g_pcfg.rows[lon].sname=="LDN" && g_pocc_dirty && g_disk.count(g_pstore)==1);
+    CHECK(g_rcfg.mode==1 && g_rcfg.percent==0.75 && g_rcfg.targets=="2 3" && g_disk.count(g_rstore)==1);
+    {FPSetup r;CHECK(g_has_last_config && SameConfig(g_last_config,style) && ReadPreset(g_last_store,r) && SameConfig(r,style));}
+    {FPSetup r;CHECK(ReadPreset(presets+"My fib.fpp",r) && SameConfig(r,mine));                                    // the same name: replaced,
+     FPSetup b;CHECK(ReadPreset(presets+"My fib.fpp.bak",b) && SameConfig(b,theirs));                                // the old one kept as .bak,
+     CHECK(g_disk.count(presets+"Other.fpp")==1);}                                                                  // other presets kept
+    {FPZoneConfig r;CHECK(FPZReadFile(presets+"My zones.fzp",r) && r.days_back==44);FPPointConfig q;CHECK(FPPReadFile(presets+"My points.fpt",q) && q.days_back==9);}
+    CHECK(g_share_msg=="Imported drawing style, zones, price points, risk, 3 presets." && g_status==g_share_msg && !FPSOffer());
+    {bool left=false;for(auto& kv:g_disk)if(kv.first.find("import.tmp")!=string::npos)left=true;CHECK(!left);}      // no temporary file left
+    // Only the parts chosen; the file's broker clock when asked for.
+    g_share_parts=FPS_ZONES;g_share_clock=false;g_pcfg.days_back=5;g_pact=g_pcfg;
+    CHECK(FPSImport() && g_zcfg.broker_mode==2 && g_zcfg.broker_gmt==3 && g_pcfg.days_back==5 && g_share_msg=="Imported zones.");
+    g_share_parts=FPS_POINTS|FPS_RISK;g_share_clock=true;g_rcfg.percent=1;g_zcfg.days_back=21;
+    CHECK(FPSImport() && g_pcfg.days_back==17 && g_rcfg.percent==0.75 && g_zcfg.days_back==21 && g_share_msg=="Imported price points, risk.");
+    g_share_parts=FPS_RISK;g_rcfg.percent=1;g_pcfg.days_back=5;
+    CHECK(FPSImport() && g_rcfg.percent==0.75 && g_pcfg.days_back==5 && g_share_msg=="Imported risk.");              // risk alone
+    g_share_parts=FPS_POINTS;g_rcfg.percent=1;
+    CHECK(FPSImport() && g_rcfg.percent==1 && g_pcfg.days_back==17 && g_share_msg=="Imported price points.");         // price points alone
+    g_rcfg.percent=0.75;
+    g_share_parts=FPS_STYLES;g_pcfg.days_back=5;
+    CHECK(FPSImport() && g_pcfg.days_back==5 && g_share_msg=="Imported drawing style, 3 presets.");
+    g_share_parts=0;CHECK(!FPSImport() && g_share_msg=="Choose what to import first.");
+    g_share_parts=15;
+    // A missing, damaged or newer file changes nothing.
+    g_pcfg.days_back=5;g_zcfg.days_back=21;
+    g_disk[shared]=good.substr(0,good.size()-1);CHECK(!FPSImport() && g_share_msg.find("damaged")!=string::npos);
+    g_disk[shared]=good+"x";CHECK(!FPSImport() && g_share_msg.find("damaged")!=string::npos);
+    g_disk[shared]=good;g_disk[shared][0]^=1;CHECK(!FPSImport() && g_share_msg.find("damaged")!=string::npos);
+    g_disk[shared]=good;g_disk[shared][good.size()-1]^=1;CHECK(!FPSImport() && g_share_msg.find("damaged")!=string::npos);   // its end mark
+    g_disk[shared]=good;g_disk[shared][4]=2;CHECK(!FPSImport() && g_share_msg.find("newer")!=string::npos);
+    g_disk.erase(shared);CHECK(!FPSImport() && g_share_msg.find("No shared settings file yet")==0);
+    CHECK(g_pcfg.days_back==5 && g_zcfg.days_back==21);
+    // A damaged part is skipped; a preset named like a path is never written; unknown parts are left alone.
+    {auto Bundle=[&](const std::vector<std::pair<string,string>>& parts)
+       {int f=FileOpen(FPS_FILE,FILE_WRITE|FILE_BIN|FILE_COMMON,'\t',0);
+        FileWriteInteger(f,FPS_MAGIC,4);FileWriteInteger(f,FPS_SCHEMA,4);WText(f,"1.70");FileWriteLong(f,g_test_now);FileWriteInteger(f,(int)parts.size(),4);
+        for(auto& q:parts){WText(f,q.first);FileWriteInteger(f,(int)q.second.size(),4);FileWriteString(f,q.second,(int)q.second.size());}
+        FileWriteInteger(f,FPS_END,4);FileClose(f);};
+     string zbad=ez;zbad[12]^=0x7F;
+     Bundle({{"zones",zbad},{"points",ep},{"preset/..\\evil.fpp",ef},{"preset/x.exe",ef},{"preset/Bad.fpp","junk"},{"layout",ef}});
+     CHECK(FPSImport() && g_zcfg.days_back==21 && g_pcfg.days_back==17);
+     CHECK(g_share_msg=="Imported price points. Not imported, kept as they were: zones, 3 presets.");
+     CHECK(g_disk.count("FibonacciPro\\evil.fpp")==0 && g_disk.count(presets+"..\\evil.fpp")==0 && g_disk.count(presets+"x.exe")==0 && g_disk.count(presets+"Bad.fpp")==0);
+     Bundle({{"preset/Sub\\a.fpp",ef}});CHECK(!FPSImport() && g_share_msg=="Imported nothing. Not imported, kept as they were: 1 preset.");}
+    g_disk[shared]=good;
+    // Settings that can't be saved stay as they were (here: no longer the owner of this workspace).
+    g_owner=false;g_zcfg.days_back=21;g_pcfg.days_back=5;g_rcfg.percent=1;
+    CHECK(FPSImport() && g_zcfg.days_back==21 && g_pcfg.days_back==5 && g_rcfg.percent==1);
+    CHECK(g_share_msg=="Imported drawing style, 3 presets. Not imported, kept as they were: zones, price points, risk.");
+    g_owner=true;
+    {std::map<string,string> keep;for(const string& f:{g_zstore,g_pstore,g_rstore,g_last_store}){keep[f]=g_disk[f];g_disk.erase(f);}
+     CHECK(FPSOffer());
+     for(auto& kv:keep){g_disk[kv.first]=kv.second;CHECK(!FPSOffer());g_disk.erase(kv.first);}                     // any one saved file: no offer
+     for(auto& kv:keep)g_disk[kv.first]=kv.second;}
+
+    // ---- the Share button and popup
+    g_ui_dirty=true;BuildUI();
+    int sx=g_toolbar_x+U(FP_TOOLBAR_WIDTH-284)+5,sy=g_toolbar_y+U(5);
+    CHECK(RegFind(UIS("T.Share"))>=0 && HitShareButton(sx,sy) && !HitShareButton(g_toolbar_x+U(FP_TOOLBAR_WIDTH-200),sy) && !HitPointsButton(sx,sy));
+    BeginMouse(sx,sy);CHECK(!g_toolbar_drag);EndMouse(sx,sy);                                                       // a press on it doesn't move the toolbar
+    g_zeditor=true;Click(UIS("T.Share"));CHECK(g_popup!=17 && g_status=="Close the Zones window first.");g_zeditor=false;
+    g_peditor=true;Click(UIS("T.Share"));CHECK(g_popup!=17 && g_status=="Close the Price points window first.");g_peditor=false;
+    g_reditor=true;Click(UIS("T.Share"));CHECK(g_popup!=17 && g_status=="Close the Risk window first.");g_reditor=false;
+    g_editor=true;Click(UIS("T.Share"));CHECK(g_popup!=17 && g_status=="Finish or cancel Properties first.");g_editor=false;
+    g_list=true;Click(UIS("T.Share"));
+    CHECK(g_popup==17 && !g_list && RegFind(Obj("Q.Export"))>=0 && RegFind(Obj("Q.Import"))>=0 && HitUI(g_popup_x+5,g_popup_y+5) && g_popup_y>g_toolbar_y);
+    CHECK(g_texts[Obj("Q.Path")]=="C:\\Users\\T\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\FibonacciPro");
+    CHECK(g_texts[Obj("Q.File")]=="Saved "+std::to_string(g_test_now)+" (1.70): drawing style, zones, price points, risk, 3 presets");
+    Click(Obj("Q.S8"));CHECK(g_share_parts==7 && g_popup==17);Click(Obj("Q.S8"));CHECK(g_share_parts==15);
+    Click(Obj("Q.S1"));Click(Obj("Q.S2"));Click(Obj("Q.S4"));CHECK(g_share_parts==8);Click(Obj("Q.S1"));Click(Obj("Q.S2"));Click(Obj("Q.S4"));CHECK(g_share_parts==15);
+    Click(Obj("Q.Clock"));CHECK(!g_share_clock);Click(Obj("Q.Clock"));CHECK(g_share_clock);
+    // Import asks for a second click within 5 seconds before it replaces anything.
+    g_pcfg.days_back=5;g_pact=g_pcfg;
+    Click(Obj("Q.Import"));CHECK(g_pcfg.days_back==5 && g_share_msg.find("Click Import again")==0 && g_texts[Obj("Q.Import")]=="Click again");
+    g_fake_ticks+=6000;Click(Obj("Q.Import"));CHECK(g_pcfg.days_back==5 && g_texts[Obj("Q.Import")]=="Click again");  // too late: it asks again
+    Click(Obj("Q.Import"));CHECK(g_pcfg.days_back==17 && g_share_msg.find("Imported")==0 && g_texts[Obj("Q.Msg")]==g_share_msg && g_texts[Obj("Q.Import")]=="Import");
+    g_pcfg.days_back=5;Click(Obj("Q.Import"));Click(Obj("Q.Clock"));Click(Obj("Q.Import"));                          // another click in between: it asks again
+    CHECK(g_pcfg.days_back==5 && g_share_msg.find("Click Import again")==0);
+    Click(Obj("Q.Clock"));g_pcfg.days_back=17;
+    Click(Obj("Q.Export"));CHECK(g_share_msg.find("Exported ")==0 && g_popup==17);
+    Click(Obj("Q.Done"));CHECK(g_popup==0 && RegFind(Obj("Q.Export"))<0);
+    Click(UIS("T.Share"));CHECK(g_popup==17);Click(UIS("T.Share"));CHECK(g_popup==0);                               // the button closes it too,
+    Click(UIS("T.Share"));BeginMouse(900,500);CHECK(g_popup==0);EndMouse(900,500);                                    // and so does a click on the chart
+
+    // ---- at start-up, an account with nothing saved is told about the shared file
+    {string z=g_zstore,pt=g_pstore,r=g_rstore,l=g_last_store,st=g_store,ws=g_ws_prefix,al=g_alive;int w=g_width,h=g_height;
+     g_zstore="FibonacciPro\\C_3_Main.zones";g_pstore="FibonacciPro\\C_3_Main.points";g_rstore="FibonacciPro\\C_3.risk";g_last_store="FibonacciPro\\C_3_Main.last.fpp";
+     g_store="FibonacciPro\\C_3_EURUSD_Main_7.bin";g_ws_prefix="FP5.T170.";g_alive=g_ws_prefix+"Alive";
+     g_owner=false;g_file_lock=INVALID_HANDLE;
+     CHECK(TryAcquire()==0 && g_owner && g_status=="Settings from another terminal are ready: Share, then Import, to use them here.");
+     g_owner=false;FileClose(g_file_lock);g_file_lock=INVALID_HANDLE;g_disk.erase(shared);
+     CHECK(TryAcquire()==0 && g_owner && g_status.find("Panel: ")==0);                                              // no shared file: the usual message
+     g_owner=false;FileClose(g_file_lock);g_file_lock=INVALID_HANDLE;g_disk[shared]=good;g_disk[g_zstore]=g_disk[z];
+     CHECK(TryAcquire()==0 && g_owner && g_status.find("Panel: ")==0);                                              // something saved: the usual message
+     FileClose(g_file_lock);g_file_lock=INVALID_HANDLE;
+     g_zstore=z;g_pstore=pt;g_rstore=r;g_last_store=l;g_store=st;g_ws_prefix=ws;g_alive=al;g_width=w;g_height=h;g_owner=true;}
    }
 
    std::printf(fails?"%d FAILED\n":"all tests passed\n",fails);

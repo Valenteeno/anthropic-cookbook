@@ -49,9 +49,10 @@ enum ENUM_ORDER_TYPE{ORDER_TYPE_BUY,ORDER_TYPE_SELL};
 const int MB_OK=0,MB_ICONWARNING=0x30,MB_ICONINFORMATION=0x40;
 enum ENUM_ACCOUNT_INFO_INTEGER{ACCOUNT_LOGIN};
 enum ENUM_TERMINAL_INFO_INTEGER{TERMINAL_KEYSTATE_CONTROL,TERMINAL_KEYSTATE_SHIFT,TERMINAL_KEYSTATE_MENU};
+enum ENUM_TERMINAL_INFO_STRING{TERMINAL_COMMONDATA_PATH,TERMINAL_DATA_PATH};
 const int OBJ_NO_PERIODS=-1,OBJ_ALL_PERIODS=0x1fffff;
 const int INVALID_HANDLE=-1,INT_VALUE=4;
-const int FILE_READ=1,FILE_WRITE=2,FILE_BIN=4,FILE_UNICODE=8,FILE_SHARE_READ=16,FILE_REWRITE=32,FILE_TXT=64,FILE_ANSI=128;
+const int FILE_READ=1,FILE_WRITE=2,FILE_BIN=4,FILE_UNICODE=8,FILE_SHARE_READ=16,FILE_REWRITE=32,FILE_TXT=64,FILE_ANSI=128,FILE_COMMON=4096;
 const int TIME_DATE=1,TIME_MINUTES=2,TIME_SECONDS=4;
 enum ENUM_FILE_PROPERTY_INTEGER{FILE_MODIFY_DATE};
 const color clrNONE=-1;
@@ -109,7 +110,7 @@ double iHigh(const string& sym,ENUM_TIMEFRAMES tf,int shift);double iLow(const s
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,int start,int count,MQLArr<MqlRates>& rates);
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,datetime from,datetime to,MQLArr<MqlRates>& rates);
 int CopyRates(const string& sym,ENUM_TIMEFRAMES tf,datetime start,int count,MQLArr<MqlRates>& rates);
-datetime TimeTradeServer();datetime TimeGMT();datetime TimeCurrent();bool PlaySound(const string& file);bool SendNotification(const string& text);
+datetime TimeTradeServer();datetime TimeGMT();datetime TimeCurrent();datetime TimeLocal();string TerminalInfoString(ENUM_TERMINAL_INFO_STRING prop);bool PlaySound(const string& file);bool SendNotification(const string& text);
 bool GlobalVariableTemp(const string& name);bool GlobalVariableSetOnCondition(const string& name,double value,double check);
 long FileGetInteger(const string& name,ENUM_FILE_PROPERTY_INTEGER prop,bool common=false);
 int FileOpen(const string& name,int flags,short delimiter='\t',uint codepage=0);void FileClose(int h);void FileFlush(int h);
@@ -119,6 +120,7 @@ bool FileIsEnding(int h);ulong FileTell(int h);ulong FileSize(int h);bool FileIs
 bool FileCopy(const string& src,int common,const string& dst,int mode);bool FileMove(const string& src,int common,const string& dst,int mode);
 bool FileDelete(const string& name,int common=0);bool FolderCreate(const string& name,int common=0);
 long FileFindFirst(const string& filter,string& name,int common=0);bool FileFindNext(long h,string& name);void FileFindClose(long h);
+uint FileReadArray(int h,MQLArr<uchar>& a,int start=0,int count=-1);uint FileWriteArray(int h,MQLArr<uchar>& a,int start=0,int count=-1);
 class CCanvas{public:
  int m_w=0,m_h=0;   // size of the created bitmap, as MT5 reports it
  bool CreateBitmapLabel(long chart,int sub,const string& name,int x,int y,int w,int h,ENUM_COLOR_FORMAT fmt);

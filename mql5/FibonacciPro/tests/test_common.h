@@ -18,7 +18,7 @@ bool ObjectSetInteger(long,const string&,ENUM_OBJECT_PROPERTY_INTEGER,long){g_se
 bool ObjectSetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING p,const string& v){g_sets_str++;if(p==OBJPROP_TEXT)g_texts[n]=v;return true;}
 string ObjectGetString(long,const string& n,ENUM_OBJECT_PROPERTY_STRING,int){auto it=g_texts.find(n);return it==g_texts.end()?"":it->second;}
 static datetime g_test_now=0;
-datetime TimeTradeServer(){return g_test_now;}datetime TimeGMT(){return g_test_now-2*3600;}datetime TimeCurrent(){return g_test_now;}
+datetime TimeTradeServer(){return g_test_now;}datetime TimeGMT(){return g_test_now-2*3600;}datetime TimeCurrent(){return g_test_now;}datetime TimeLocal(){return g_test_now;}
 static std::map<string,double> g_gv;static int g_sounds=0,g_pushes=0;
 bool PlaySound(const string&){g_sounds++;return true;}bool SendNotification(const string&){g_pushes++;return true;}
 bool GlobalVariableTemp(const string& n){if(g_gv.count(n))return false;g_gv[n]=0;return true;}
@@ -26,8 +26,10 @@ bool GlobalVariableSetOnCondition(const string& n,double v,double c){auto it=g_g
 // In-memory files (1 byte per character).
 struct MemFile{string name,data;size_t pos=0;bool write=false;};
 static std::map<string,string> g_disk;static std::map<int,MemFile> g_open;static int g_next_handle=1;
-int FileOpen(const string& n,int flags,short,uint)
-  {MemFile f;f.name=n;f.write=(flags&FILE_WRITE)!=0;if(!f.write){auto it=g_disk.find(n);if(it==g_disk.end())return INVALID_HANDLE;f.data=it->second;}g_open[g_next_handle]=f;return g_next_handle++;}
+// MetaTrader's Common folder (FILE_COMMON), shared by every terminal, is its own namespace.
+static string DiskKey(const string& n,int common){return (common&FILE_COMMON)?"<Common>\\"+n:n;}
+int FileOpen(const string& n0,int flags,short,uint)
+  {string n=DiskKey(n0,flags);MemFile f;f.name=n;f.write=(flags&FILE_WRITE)!=0;if(!f.write){auto it=g_disk.find(n);if(it==g_disk.end())return INVALID_HANDLE;f.data=it->second;}g_open[g_next_handle]=f;return g_next_handle++;}
 void FileClose(int h){auto it=g_open.find(h);if(it==g_open.end())return;if(it->second.write)g_disk[it->second.name]=it->second.data;g_open.erase(it);}
 void FileFlush(int){}
 template<class T> static uint MemWrite(int h,const T& v){g_open[h].data.append((const char*)&v,sizeof(T));return sizeof(T);}
@@ -38,11 +40,60 @@ int FileReadInteger(int h,int){return MemRead<int>(h);}long FileReadLong(int h){
 string FileReadString(int h,int len){MemFile& f=g_open[h];string s=f.data.substr(std::min(f.pos,f.data.size()),len);f.pos+=len;return s;}
 bool FileIsEnding(int h){return g_open[h].pos>=g_open[h].data.size();}
 ulong FileTell(int h){return g_open[h].pos;}ulong FileSize(int h){return g_open[h].data.size();}
-bool FileIsExist(const string& n,int){return g_disk.count(n)>0;}
-bool FileCopy(const string& a,int,const string& b,int){if(!g_disk.count(a))return false;g_disk[b]=g_disk[a];return true;}
-bool FileMove(const string& a,int,const string& b,int){if(!g_disk.count(a))return false;g_disk[b]=g_disk[a];g_disk.erase(a);return true;}
-bool FileDelete(const string& n,int){return g_disk.erase(n)>0;}
-long FileFindFirst(const string&,string&,int){return INVALID_HANDLE;}bool FileFindNext(long,string&){return false;}void FileFindClose(long){}
+bool FileIsExist(const string& n,int c){return g_disk.count(DiskKey(n,c))>0;}
+// As in MT5: the source in the common folder with common=FILE_COMMON, the destination with
+// FILE_COMMON in mode; an existing destination needs FILE_REWRITE.
+bool FileCopy(const string& a0,int c,const string& b0,int m)
+  {string a=DiskKey(a0,c),b=DiskKey(b0,m);if(!g_disk.count(a) || (g_disk.count(b) && !(m&FILE_REWRITE)))return false;g_disk[b]=g_disk[a];return true;}
+bool FileMove(const string& a0,int c,const string& b0,int m)
+  {string a=DiskKey(a0,c),b=DiskKey(b0,m);if(!g_disk.count(a) || (g_disk.count(b) && !(m&FILE_REWRITE)))return false;string d=g_disk[a];g_disk.erase(a);g_disk[b]=d;return true;}
+bool FileDelete(const string& n,int c){return g_disk.erase(DiskKey(n,c))>0;}
+// Files of one folder matching a pattern with '*' (sub-folders are not listed).
+static bool Glob(const string& p,const string& s)
+  {
+   size_t star=p.find('*');
+   if(star==string::npos)return p==s;
+   string head=p.substr(0,star),tail=p.substr(star+1);
+   if(s.size()<head.size() || s.compare(0,head.size(),head)!=0)return false;
+   for(size_t i=head.size();i<=s.size();i++)if(Glob(tail,s.substr(i)))return true;
+   return false;
+  }
+static std::map<long,std::vector<string>> g_finds;static long g_next_find=100;
+long FileFindFirst(const string& filter,string& name,int c)
+  {
+   string f=DiskKey(filter,c);
+   size_t cut=f.rfind('\\');
+   string dir=cut==string::npos?"":f.substr(0,cut+1),pat=cut==string::npos?f:f.substr(cut+1);
+   std::vector<string> hits;
+   for(auto& kv:g_disk)
+     {
+      if(kv.first.size()<=dir.size() || kv.first.compare(0,dir.size(),dir)!=0)continue;
+      string rest=kv.first.substr(dir.size());
+      if(rest.find('\\')==string::npos && Glob(pat,rest))hits.push_back(rest);
+     }
+   if(hits.empty())return INVALID_HANDLE;
+   name=hits[0];hits.erase(hits.begin());
+   long h=g_next_find++;g_finds[h]=hits;return h;
+  }
+bool FileFindNext(long h,string& name){auto it=g_finds.find(h);if(it==g_finds.end() || it->second.empty())return false;name=it->second[0];it->second.erase(it->second.begin());return true;}
+void FileFindClose(long h){g_finds.erase(h);}
+uint FileWriteArray(int h,MQLArr<uchar>& a,int start,int count)
+  {
+   if(count<0)count=(int)a.v.size()-start;
+   if(start<0 || count<0 || start+count>(int)a.v.size())return 0;
+   if(count>0)g_open[h].data.append((const char*)a.v.data()+start,(size_t)count);
+   return (uint)count;
+  }
+uint FileReadArray(int h,MQLArr<uchar>& a,int start,int count)
+  {
+   MemFile& f=g_open[h];
+   size_t avail=f.pos<f.data.size()?f.data.size()-f.pos:0;
+   size_t n=count<0?avail:std::min((size_t)count,avail);
+   if(start<0)return 0;
+   if(a.v.size()<(size_t)start+n)a.v.resize((size_t)start+n);
+   if(n>0)std::memcpy(a.v.data()+start,f.data.data()+f.pos,n);
+   f.pos+=n;return (uint)n;
+  }
 double MathAbs(double v){return std::fabs(v);}double MathRound(double v){return std::round(v);}double MathFloor(double v){return std::floor(v);}
 double MathMod(double a,double b){return std::fmod(a,b);}bool MathIsValidNumber(double v){return std::isfinite(v);}
 double NormalizeDouble(double v,int d){double m=std::pow(10.0,d);return std::round(v*m)/m;}

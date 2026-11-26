@@ -41,8 +41,10 @@ bool FileMove(const string&,int,const string&,int){return false;}int FileOpen(co
 double FileReadDouble(int){return 0;}int FileReadInteger(int,int){return 0;}long FileReadLong(int){return 0;}string FileReadString(int,int){return "";}
 ulong FileSize(int){return 0;}ulong FileTell(int){return 0;}uint FileWriteDouble(int,double){return 0;}uint FileWriteInteger(int,int,int){return 0;}
 uint FileWriteLong(int,long){return 0;}uint FileWriteString(int,const string&,int){return 0;}
+uint FileReadArray(int,MQLArr<uchar>&,int,int){return 0;}uint FileWriteArray(int,MQLArr<uchar>&,int,int){return 0;}
 #endif
 bool FolderCreate(const string&,int){return true;}
+string TerminalInfoString(ENUM_TERMINAL_INFO_STRING p){return p==TERMINAL_COMMONDATA_PATH?"C:\\Users\\T\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common":"C:\\Terminal";}
 int GetLastError(){return 0;}void ResetLastError(){}ulong GetMicrosecondCount(){return 0;}
 static ulong g_fake_ticks=100000;ulong GetTickCount64(){return g_fake_ticks;}
 bool IndicatorSetString(ENUM_CUSTOMIND_PROPERTY_STRING,const string&){return true;}
@@ -67,7 +69,7 @@ int iBars(const string&,ENUM_TIMEFRAMES){return 0;}datetime iTime(const string&,
 double iOpen(const string&,ENUM_TIMEFRAMES,int){return 0;}double iHigh(const string&,ENUM_TIMEFRAMES,int){return 0;}
 double iLow(const string&,ENUM_TIMEFRAMES,int){return 0;}double iClose(const string&,ENUM_TIMEFRAMES,int){return 0;}
 #ifndef TEST_OWN_TIME
-datetime TimeTradeServer(){return 0;}datetime TimeGMT(){return 0;}datetime TimeCurrent(){return 0;}
+datetime TimeTradeServer(){return 0;}datetime TimeGMT(){return 0;}datetime TimeCurrent(){return 0;}datetime TimeLocal(){return 0;}
 #endif
 #ifndef TEST_OWN_RATES
 int CopyRates(const string&,ENUM_TIMEFRAMES,datetime,datetime,MQLArr<MqlRates>&){return 0;}
